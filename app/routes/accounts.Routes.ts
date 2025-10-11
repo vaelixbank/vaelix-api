@@ -1,170 +1,60 @@
 import { Router } from 'express';
-import { authenticate, AuthenticatedRequest } from '../middleware/auth';
-import { weavrService } from '../services/weavrService';
+import { AccountController } from '../controllers/AccountController';
+import { WeavrService } from '../services/weavrService';
+import { validateRequiredFields, validateUUID } from '../utils/validation';
 
 const router = Router();
-
-// Apply authentication middleware to all routes
-router.use(authenticate);
+const weavrService = new WeavrService();
+const accountController = new AccountController(weavrService);
 
 // Get all managed accounts
-router.get('/', async (req: AuthenticatedRequest, res) => {
-  try {
-    const accounts = await weavrService.makeRequest(
-      'GET',
-      '/multi/managed_accounts',
-      undefined,
-      req.apiKey,
-      req.authToken
-    );
-    res.json(accounts);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+router.get('/', (req, res) =>
+  accountController.getAllAccounts(req, res)
+);
 
 // Create a managed account
-router.post('/', async (req: AuthenticatedRequest, res) => {
-  try {
-    const account = await weavrService.makeRequest(
-      'POST',
-      '/multi/managed_accounts',
-      req.body,
-      req.apiKey,
-      req.authToken
-    );
-    res.status(201).json(account);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+router.post('/', validateRequiredFields(['profile_id']), (req, res) =>
+  accountController.createAccount(req, res)
+);
 
 // Get a managed account
-router.get('/:id', async (req: AuthenticatedRequest, res) => {
-  try {
-    const account = await weavrService.makeRequest(
-      'GET',
-      `/multi/managed_accounts/${req.params.id}`,
-      undefined,
-      req.apiKey,
-      req.authToken
-    );
-    res.json(account);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+router.get('/:id', (req, res) =>
+  accountController.getAccount(req, res)
+);
 
 // Update a managed account
-router.patch('/:id', async (req: AuthenticatedRequest, res) => {
-  try {
-    const account = await weavrService.makeRequest(
-      'PATCH',
-      `/multi/managed_accounts/${req.params.id}`,
-      req.body,
-      req.apiKey,
-      req.authToken
-    );
-    res.json(account);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+router.patch('/:id', (req, res) =>
+  accountController.updateAccount(req, res)
+);
 
 // Block a managed account
-router.post('/:id/block', async (req: AuthenticatedRequest, res) => {
-  try {
-    const result = await weavrService.makeRequest(
-      'POST',
-      `/multi/managed_accounts/${req.params.id}/block`,
-      req.body,
-      req.apiKey,
-      req.authToken
-    );
-    res.json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+router.post('/:id/block', (req, res) =>
+  accountController.blockAccount(req, res)
+);
 
 // Unblock a managed account
-router.post('/:id/unblock', async (req: AuthenticatedRequest, res) => {
-  try {
-    const result = await weavrService.makeRequest(
-      'POST',
-      `/multi/managed_accounts/${req.params.id}/unblock`,
-      req.body,
-      req.apiKey,
-      req.authToken
-    );
-    res.json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+router.post('/:id/unblock', (req, res) =>
+  accountController.unblockAccount(req, res)
+);
 
-// Get managed account statement
-router.get('/:id/statement', async (req: AuthenticatedRequest, res) => {
-  try {
-    const statement = await weavrService.makeRequest(
-      'GET',
-      `/multi/managed_accounts/${req.params.id}/statement`,
-      undefined,
-      req.apiKey,
-      req.authToken
-    );
-    res.json(statement);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// Get a managed account statement
+router.get('/:id/statement', (req, res) =>
+  accountController.getAccountStatement(req, res)
+);
 
-// Upgrade managed account with IBAN
-router.post('/:id/iban', async (req: AuthenticatedRequest, res) => {
-  try {
-    const result = await weavrService.makeRequest(
-      'POST',
-      `/multi/managed_accounts/${req.params.id}/iban`,
-      req.body,
-      req.apiKey,
-      req.authToken
-    );
-    res.json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// Upgrade a managed account with IBAN
+router.post('/:id/iban', (req, res) =>
+  accountController.upgradeAccountWithIBAN(req, res)
+);
 
-// Get managed account IBAN
-router.get('/:id/iban', async (req: AuthenticatedRequest, res) => {
-  try {
-    const iban = await weavrService.makeRequest(
-      'GET',
-      `/multi/managed_accounts/${req.params.id}/iban`,
-      undefined,
-      req.apiKey,
-      req.authToken
-    );
-    res.json(iban);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// Get a managed account IBAN
+router.get('/:id/iban', (req, res) =>
+  accountController.getAccountIBAN(req, res)
+);
 
 // Remove a managed account
-router.delete('/:id', async (req: AuthenticatedRequest, res) => {
-  try {
-    const result = await weavrService.makeRequest(
-      'POST',
-      `/multi/managed_accounts/${req.params.id}/remove`,
-      req.body,
-      req.apiKey,
-      req.authToken
-    );
-    res.json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+router.delete('/:id', (req, res) =>
+  accountController.removeAccount(req, res)
+);
 
 export default router;
