@@ -1,3 +1,31 @@
+// DB Model
+export interface Transaction {
+  id: number;
+  account_id: number;
+  amount: number;
+  currency: string;
+  type?: string;
+  status: string;
+  description?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateTransactionRequest {
+  account_id: number;
+  amount: number;
+  currency?: string;
+  type?: string;
+  status?: string;
+  description?: string;
+}
+
+export interface UpdateTransactionRequest {
+  status?: string;
+  description?: string;
+}
+
+// Weavr API interfaces
 export interface SendTransaction {
   id: string;
   profile_id: string;

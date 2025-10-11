@@ -1,3 +1,29 @@
+// DB Model
+export interface User {
+  id: number;
+  email: string;
+  full_name: string;
+  phone?: string;
+  kyc_status?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateUserRequest {
+  email: string;
+  full_name: string;
+  phone?: string;
+  kyc_status?: string;
+}
+
+export interface UpdateUserRequest {
+  email?: string;
+  full_name?: string;
+  phone?: string;
+  kyc_status?: string;
+}
+
+// Weavr API interfaces
 export interface AuthorisedUser {
   id: string;
   name: string;

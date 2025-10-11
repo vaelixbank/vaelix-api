@@ -9,6 +9,13 @@ interface Config {
   weavr: {
     baseUrl: string;
   };
+  database: {
+    host: string;
+    port: number;
+    database: string;
+    user: string;
+    password: string;
+  };
   cors: {
     origins: string[];
     credentials: boolean;
@@ -23,6 +30,13 @@ const config: Config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   weavr: {
     baseUrl: process.env.WEAVR_API_BASE_URL || 'https://api.weavr.io',
+  },
+  database: {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432', 10),
+    database: process.env.DB_NAME || 'vaelixbank',
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || '',
   },
   cors: {
     origins: process.env.NODE_ENV === 'production'

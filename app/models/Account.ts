@@ -1,3 +1,33 @@
+// DB Model
+export interface Account {
+  id: number;
+  user_id: number;
+  account_number?: string;
+  account_type?: string;
+  currency: string;
+  balance: number;
+  status: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateAccountRequest {
+  user_id: number;
+  account_number?: string;
+  account_type?: string;
+  currency?: string;
+  balance?: number;
+  status?: string;
+}
+
+export interface UpdateAccountRequest {
+  account_number?: string;
+  account_type?: string;
+  balance?: number;
+  status?: string;
+}
+
+// Weavr API interfaces
 export interface ManagedAccount {
   id: string;
   profile_id: string;

@@ -1,340 +1,95 @@
 import { Request, Response } from 'express';
-import { WeavrService } from '../services/weavrService';
-import { ApiResponseHandler } from '../utils/response';
-import { logger } from '../utils/logger';
-import { parseWeavrError, getWeavrErrorStatus } from '../utils/weavr';
-import { CreateManagedAccountRequest, UpdateManagedAccountRequest } from '../models/Account';
+import pool from '../utils/database';
+import { Account, CreateAccountRequest, UpdateAccountRequest } from '../models/Account';
 
 export class AccountController {
-  constructor(private weavrService: WeavrService) {}
-
-  async getAllAccounts(req: Request, res: Response) {
+  static async getAllAccounts(req: Request, res: Response) {
     try {
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
-
-      logger.weavrRequest('GET', '/multi/managed_accounts', req.headers['x-request-id'] as string);
-
-      const result = await this.weavrService.makeRequest(
-        'GET',
-        '/multi/managed_accounts',
-        undefined,
-        apiKey,
-        authToken
-      );
-
-      logger.weavrResponse('GET', '/multi/managed_accounts', 200, req.headers['x-request-id'] as string);
-
-      return ApiResponseHandler.success(res, result);
-    } catch (error: any) {
-      logger.weavrError('GET', '/multi/managed_accounts', error, req.headers['x-request-id'] as string);
-
-      const weavrError = parseWeavrError(error);
-      return ApiResponseHandler.error(
-        res,
-        weavrError.message,
-        weavrError.code,
-        getWeavrErrorStatus(weavrError),
-        weavrError.details
-      );
+      const result = await pool.query('SELECT * FROM accounts ORDER BY created_at DESC');
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Error fetching accounts:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
   }
 
-  async createAccount(req: Request, res: Response) {
-    try {
-      const accountData: CreateManagedAccountRequest = req.body;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
-
-      logger.weavrRequest('POST', '/multi/managed_accounts', req.headers['x-request-id'] as string);
-
-      const result = await this.weavrService.makeRequest(
-        'POST',
-        '/multi/managed_accounts',
-        accountData,
-        apiKey,
-        authToken
-      );
-
-      logger.weavrResponse('POST', '/multi/managed_accounts', 201, req.headers['x-request-id'] as string);
-
-      return ApiResponseHandler.created(res, result);
-    } catch (error: any) {
-      logger.weavrError('POST', '/multi/managed_accounts', error, req.headers['x-request-id'] as string);
-
-      const weavrError = parseWeavrError(error);
-      return ApiResponseHandler.error(
-        res,
-        weavrError.message,
-        weavrError.code,
-        getWeavrErrorStatus(weavrError),
-        weavrError.details
-      );
-    }
-  }
-
-  async getAccount(req: Request, res: Response) {
+  static async getAccountById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
+      const result = await pool.query('SELECT * FROM accounts WHERE id = $1', [id]);
 
-      logger.weavrRequest('GET', `/multi/managed_accounts/${req.params.id}`, req.headers['x-request-id'] as string);
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Account not found' });
+      }
 
-      const result = await this.weavrService.makeRequest(
-        'GET',
-        `/multi/managed_accounts/${req.params.id}`,
-        undefined,
-        apiKey,
-        authToken
-      );
-
-      logger.weavrResponse('GET', `/multi/managed_accounts/${req.params.id}`, 200, req.headers['x-request-id'] as string);
-
-      return ApiResponseHandler.success(res, result);
-    } catch (error: any) {
-      logger.weavrError('GET', `/multi/managed_accounts/${req.params.id}`, error, req.headers['x-request-id'] as string);
-
-      const weavrError = parseWeavrError(error);
-      return ApiResponseHandler.error(
-        res,
-        weavrError.message,
-        weavrError.code,
-        getWeavrErrorStatus(weavrError),
-        weavrError.details
-      );
+      res.json(result.rows[0]);
+    } catch (error) {
+      console.error('Error fetching account:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
   }
 
-  async updateAccount(req: Request, res: Response) {
+  static async getAccountsByUserId(req: Request, res: Response) {
     try {
-      const { id } = req.params;
-      const updateData: UpdateManagedAccountRequest = req.body;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
-
-      logger.weavrRequest('PATCH', `/multi/managed_accounts/${req.params.id}`, req.headers['x-request-id'] as string);
-
-      const result = await this.weavrService.makeRequest(
-        'PATCH',
-        `/multi/managed_accounts/${req.params.id}`,
-        updateData,
-        apiKey,
-        authToken
-      );
-
-      logger.weavrResponse('PATCH', `/multi/managed_accounts/${req.params.id}`, 200, req.headers['x-request-id'] as string);
-
-      return ApiResponseHandler.success(res, result);
-    } catch (error: any) {
-      logger.weavrError('PATCH', `/multi/managed_accounts/${req.params.id}`, error, req.headers['x-request-id'] as string);
-
-      const weavrError = parseWeavrError(error);
-      return ApiResponseHandler.error(
-        res,
-        weavrError.message,
-        weavrError.code,
-        getWeavrErrorStatus(weavrError),
-        weavrError.details
-      );
+      const { userId } = req.params;
+      const result = await pool.query('SELECT * FROM accounts WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Error fetching user accounts:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
   }
 
-  async blockAccount(req: Request, res: Response) {
+  static async createAccount(req: Request, res: Response) {
     try {
-      const { id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
+      const { user_id, account_number, account_type, currency, balance, status }: CreateAccountRequest = req.body;
 
-      logger.weavrRequest('POST', `/multi/managed_accounts/${req.params.id}/block`, req.headers['x-request-id'] as string);
-
-      const result = await this.weavrService.makeRequest(
-        'POST',
-        `/multi/managed_accounts/${req.params.id}/block`,
-        req.body,
-        apiKey,
-        authToken
+      const result = await pool.query(
+        'INSERT INTO accounts (user_id, account_number, account_type, currency, balance, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+        [user_id, account_number, account_type, currency || 'EUR', balance || 0, status || 'active']
       );
 
-      logger.weavrResponse('POST', `/multi/managed_accounts/${req.params.id}/block`, 200, req.headers['x-request-id'] as string);
-
-      return ApiResponseHandler.success(res, result);
+      res.status(201).json(result.rows[0]);
     } catch (error: any) {
-      logger.weavrError('POST', `/multi/managed_accounts/${req.params.id}/block`, error, req.headers['x-request-id'] as string);
-
-      const weavrError = parseWeavrError(error);
-      return ApiResponseHandler.error(
-        res,
-        weavrError.message,
-        weavrError.code,
-        getWeavrErrorStatus(weavrError),
-        weavrError.details
-      );
+      console.error('Error creating account:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
   }
 
-  async unblockAccount(req: Request, res: Response) {
+  static async updateAccount(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
+      const { account_number, account_type, balance, status }: UpdateAccountRequest = req.body;
 
-      logger.weavrRequest('POST', `/multi/managed_accounts/${req.params.id}/unblock`, req.headers['x-request-id'] as string);
-
-      const result = await this.weavrService.makeRequest(
-        'POST',
-        `/multi/managed_accounts/${req.params.id}/unblock`,
-        req.body,
-        apiKey,
-        authToken
+      const result = await pool.query(
+        'UPDATE accounts SET account_number = COALESCE($1, account_number), account_type = COALESCE($2, account_type), balance = COALESCE($3, balance), status = COALESCE($4, status), updated_at = NOW() WHERE id = $5 RETURNING *',
+        [account_number, account_type, balance, status, id]
       );
 
-      logger.weavrResponse('POST', `/multi/managed_accounts/${req.params.id}/unblock`, 200, req.headers['x-request-id'] as string);
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Account not found' });
+      }
 
-      return ApiResponseHandler.success(res, result);
-    } catch (error: any) {
-      logger.weavrError('POST', `/multi/managed_accounts/${req.params.id}/unblock`, error, req.headers['x-request-id'] as string);
-
-      const weavrError = parseWeavrError(error);
-      return ApiResponseHandler.error(
-        res,
-        weavrError.message,
-        weavrError.code,
-        getWeavrErrorStatus(weavrError),
-        weavrError.details
-      );
+      res.json(result.rows[0]);
+    } catch (error) {
+      console.error('Error updating account:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
   }
 
-  async getAccountStatement(req: Request, res: Response) {
+  static async deleteAccount(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
+      const result = await pool.query('DELETE FROM accounts WHERE id = $1 RETURNING *', [id]);
 
-      logger.weavrRequest('GET', `/multi/managed_accounts/${req.params.id}/statement`, req.headers['x-request-id'] as string);
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Account not found' });
+      }
 
-      const result = await this.weavrService.makeRequest(
-        'GET',
-        `/multi/managed_accounts/${req.params.id}/statement`,
-        undefined,
-        apiKey,
-        authToken
-      );
-
-      logger.weavrResponse('GET', `/multi/managed_accounts/${req.params.id}/statement`, 200, req.headers['x-request-id'] as string);
-
-      return ApiResponseHandler.success(res, result);
-    } catch (error: any) {
-      logger.weavrError('POST', `/multi/managed_accounts/${req.params.id}/unblock`, error, req.headers['x-request-id'] as string);
-
-      const weavrError = parseWeavrError(error);
-      return ApiResponseHandler.error(
-        res,
-        weavrError.message,
-        weavrError.code,
-        getWeavrErrorStatus(weavrError),
-        weavrError.details
-      );
-    }
-  }
-
-  async upgradeAccountWithIBAN(req: Request, res: Response) {
-    try {
-      const { id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
-
-      logger.weavrRequest('POST', `/multi/managed_accounts/${req.params.id}/iban`, req.headers['x-request-id'] as string);
-
-      const result = await this.weavrService.makeRequest(
-        'POST',
-        `/multi/managed_accounts/${req.params.id}/iban`,
-        req.body,
-        apiKey,
-        authToken
-      );
-
-      logger.weavrResponse('POST', `/multi/managed_accounts/${req.params.id}/iban`, 200, req.headers['x-request-id'] as string);
-
-      return ApiResponseHandler.success(res, result);
-    } catch (error: any) {
-      logger.weavrError('POST', `/multi/managed_accounts/${req.params.id}/unblock`, error, req.headers['x-request-id'] as string);
-
-      const weavrError = parseWeavrError(error);
-      return ApiResponseHandler.error(
-        res,
-        weavrError.message,
-        weavrError.code,
-        getWeavrErrorStatus(weavrError),
-        weavrError.details
-      );
-    }
-  }
-
-  async getAccountIBAN(req: Request, res: Response) {
-    try {
-      const { id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
-
-      logger.weavrRequest('GET', `/multi/managed_accounts/${req.params.id}/iban`, req.headers['x-request-id'] as string);
-
-      const result = await this.weavrService.makeRequest(
-        'GET',
-        `/multi/managed_accounts/${req.params.id}/iban`,
-        undefined,
-        apiKey,
-        authToken
-      );
-
-      logger.weavrResponse('GET', `/multi/managed_accounts/${req.params.id}/iban`, 200, req.headers['x-request-id'] as string);
-
-      return ApiResponseHandler.success(res, result);
-    } catch (error: any) {
-      logger.weavrError('POST', `/multi/managed_accounts/${req.params.id}/unblock`, error, req.headers['x-request-id'] as string);
-
-      const weavrError = parseWeavrError(error);
-      return ApiResponseHandler.error(
-        res,
-        weavrError.message,
-        weavrError.code,
-        getWeavrErrorStatus(weavrError),
-        weavrError.details
-      );
-    }
-  }
-
-  async removeAccount(req: Request, res: Response) {
-    try {
-      const { id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
-
-      logger.weavrRequest('POST', `/multi/managed_accounts/${req.params.id}/remove`, req.headers['x-request-id'] as string);
-
-      const result = await this.weavrService.makeRequest(
-        'POST',
-        `/multi/managed_accounts/${req.params.id}/remove`,
-        req.body,
-        apiKey,
-        authToken
-      );
-
-      logger.weavrResponse('POST', `/multi/managed_accounts/${req.params.id}/remove`, 200, req.headers['x-request-id'] as string);
-
-      return ApiResponseHandler.success(res, result);
-    } catch (error: any) {
-      logger.weavrError('POST', `/multi/managed_accounts/${req.params.id}/unblock`, error, req.headers['x-request-id'] as string);
-
-      const weavrError = parseWeavrError(error);
-      return ApiResponseHandler.error(
-        res,
-        weavrError.message,
-        weavrError.code,
-        getWeavrErrorStatus(weavrError),
-        weavrError.details
-      );
+      res.json({ message: 'Account deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
   }
 }

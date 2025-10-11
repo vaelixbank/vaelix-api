@@ -83,3 +83,78 @@ export const validateCurrency = (currency: string): boolean => {
 export const validateAmount = (amount: number): boolean => {
   return typeof amount === 'number' && amount > 0 && Number.isFinite(amount);
 };
+
+// DB Model validations
+export const validateUserData = (req: Request, res: Response, next: NextFunction) => {
+  const { email, full_name } = req.body;
+
+  if (!email || !validateEmail(email)) {
+    return res.status(400).json({
+      error: 'Valid email is required',
+      code: 'INVALID_EMAIL'
+    });
+  }
+
+  if (!full_name || typeof full_name !== 'string' || full_name.length < 2) {
+    return res.status(400).json({
+      error: 'Full name is required and must be at least 2 characters',
+      code: 'INVALID_FULL_NAME'
+    });
+  }
+
+  next();
+};
+
+export const validateAccountData = (req: Request, res: Response, next: NextFunction) => {
+  const { user_id, currency, balance } = req.body;
+
+  if (!user_id || typeof user_id !== 'number') {
+    return res.status(400).json({
+      error: 'Valid user_id is required',
+      code: 'INVALID_USER_ID'
+    });
+  }
+
+  if (currency && !validateCurrency(currency)) {
+    return res.status(400).json({
+      error: 'Currency must be a valid 3-letter code',
+      code: 'INVALID_CURRENCY'
+    });
+  }
+
+  if (balance !== undefined && (typeof balance !== 'number' || balance < 0)) {
+    return res.status(400).json({
+      error: 'Balance must be a non-negative number',
+      code: 'INVALID_BALANCE'
+    });
+  }
+
+  next();
+};
+
+export const validateApiKeyData = (req: Request, res: Response, next: NextFunction) => {
+  const { user_id, type, expires_at } = req.body;
+
+  if (!user_id || typeof user_id !== 'number') {
+    return res.status(400).json({
+      error: 'Valid user_id is required',
+      code: 'INVALID_USER_ID'
+    });
+  }
+
+  if (!type || !['client', 'server'].includes(type)) {
+    return res.status(400).json({
+      error: 'Type must be either "client" or "server"',
+      code: 'INVALID_API_KEY_TYPE'
+    });
+  }
+
+  if (expires_at && isNaN(Date.parse(expires_at))) {
+    return res.status(400).json({
+      error: 'expires_at must be a valid date',
+      code: 'INVALID_EXPIRATION_DATE'
+    });
+  }
+
+  next();
+};

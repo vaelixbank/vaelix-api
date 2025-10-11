@@ -1,9 +1,32 @@
 import { Router } from 'express';
+import { UserController } from '../controllers/UserController';
 import { weavrService } from '../services/weavrService';
+import { validateUserData } from '../utils/validation';
+import { authenticateApiKey, requireServerKey } from '../middleware/apiKeyAuth';
 
 const router = Router();
 
-// Create a user
+// DB Operations (require server key for management)
+router.use('/db', authenticateApiKey);
+router.use('/db', requireServerKey);
+
+// Create a user (DB)
+router.post('/db', validateUserData, UserController.createUser);
+
+// Get all users (DB)
+router.get('/db', UserController.getAllUsers);
+
+// Get a user (DB)
+router.get('/db/:id', UserController.getUserById);
+
+// Update a user (DB)
+router.patch('/db/:id', UserController.updateUser);
+
+// Delete a user (DB)
+router.delete('/db/:id', UserController.deleteUser);
+
+// Weavr Operations
+// Create a user (Weavr)
 router.post('/', async (req, res) => {
   try {
     const result = await weavrService.makeRequest(
@@ -19,7 +42,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Get all users
+// Get all users (Weavr)
 router.get('/', async (req, res) => {
   try {
     const result = await weavrService.makeRequest(
@@ -35,7 +58,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get a user
+// Get a user (Weavr)
 router.get('/:id', async (req, res) => {
   try {
     const result = await weavrService.makeRequest(
@@ -51,7 +74,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Update a user
+// Update a user (Weavr)
 router.patch('/:id', async (req, res) => {
   try {
     const result = await weavrService.makeRequest(

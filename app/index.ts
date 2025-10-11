@@ -14,6 +14,8 @@ import cardRoutes from './routes/card.Routes';
 import linkedAccountsRoutes from './routes/linkedAccounts.Routes';
 import transactionsRoutes from './routes/transactions.Routes';
 import bulkRoutes from './routes/bulk.Routes';
+import apiKeysRoutes from './routes/apiKeys.Routes';
+import mobileAuthRoutes from './routes/mobileAuth.Routes';
 import { logger } from './utils/logger';
 
 const app = express();
@@ -74,6 +76,8 @@ app.use('/api/cards', cardRoutes);
 app.use('/api/linked-accounts', linkedAccountsRoutes);
 app.use('/api/transactions', transactionsRoutes);
 app.use('/api/bulk', bulkRoutes);
+app.use('/api/keys', apiKeysRoutes);
+app.use('/api/auth/mobile', mobileAuthRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
