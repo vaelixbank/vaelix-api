@@ -46,12 +46,19 @@ export class WeavrAccountController {
       const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
       const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
+      // Prepare data for Weavr, using account_type in tag if provided
+      const weavrData = {
+        profile_id: accountData.profile_id,
+        name: accountData.name,
+        tag: accountData.account_type ? `${accountData.account_type}_${accountData.tag || 'account'}` : accountData.tag
+      };
+
       logger.weavrRequest('POST', '/multi/managed_accounts', req.headers['x-request-id'] as string);
 
       const result = await this.weavrService.makeRequest(
         'POST',
         '/multi/managed_accounts',
-        accountData,
+        weavrData,
         apiKey,
         authToken
       );

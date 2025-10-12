@@ -61,6 +61,7 @@ export interface CreateManagedAccountRequest {
   profile_id: string;
   name?: string;
   tag?: string;
+  account_type?: 'current' | 'savings' | 'business' | 'bank';
 }
 
 export interface UpdateManagedAccountRequest {
