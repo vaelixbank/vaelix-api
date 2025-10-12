@@ -100,7 +100,14 @@ export class WeavrSyncService {
         return { success: false, error: 'Account not synced with Weavr' };
       }
 
-      // Get current balance from Weavr
+      // For bank accounts (master accounts), do NOT sync balance from Weavr
+      // Balance is maintained locally only
+      if (account.account_type === 'master' || account.account_type === 'bank') {
+        logger.info('Skipping balance sync for bank account - balance maintained locally only', { accountId });
+        return { success: true, weavrId: account.weavr_id };
+      }
+
+      // For regular accounts, sync balance from Weavr (but this should be rare)
       const weavrBalance = await this.weavrService.makeRequest(
         'GET',
         `/multi/managed_accounts/${account.weavr_id}`,
@@ -109,14 +116,14 @@ export class WeavrSyncService {
         authToken
       );
 
-      // Update local balance
+      // Update local balance - but mark as weavr_synced to avoid conflicts
       await AccountQueries.updateAccountBalanceFromWeavr(accountId, {
         balance: weavrBalance.balance?.available + weavrBalance.balance?.blocked + weavrBalance.balance?.reserved || 0,
         available_balance: weavrBalance.balance?.available || 0,
         blocked_balance: weavrBalance.balance?.blocked || 0,
         reserved_balance: weavrBalance.balance?.reserved || 0,
         last_weavr_sync: new Date(),
-        sync_status: 'synced'
+        sync_status: 'weavr_synced' // Different status to indicate external sync
       });
 
       return { success: true };
@@ -414,20 +421,31 @@ export class WeavrSyncService {
       return;
     }
 
-    // Update local balance
+    // For bank/master accounts, do NOT update balance from Weavr webhooks
+    // Balance is controlled locally only
+    if (account.account_type === 'master' || account.account_type === 'bank') {
+      logger.info('Ignoring balance update webhook for bank account - balance maintained locally', {
+        weavrAccountId,
+        accountId: account.id,
+        accountType: account.account_type
+      });
+      return;
+    }
+
+    // For regular accounts, update balance from Weavr webhook
     await AccountQueries.updateAccountBalanceFromWeavr(account.id, {
       balance: (newBalance.available || 0) + (newBalance.blocked || 0) + (newBalance.reserved || 0),
       available_balance: newBalance.available || 0,
       blocked_balance: newBalance.blocked || 0,
       reserved_balance: newBalance.reserved || 0,
       last_weavr_sync: new Date(),
-      sync_status: 'synced'
+      sync_status: 'weavr_synced'
     });
 
     // Record balance change in history
     await AccountQueries.recordBalanceChange(account.id, {
-      change_type: 'weavr_sync',
-      new_balance: account.balance,
+      change_type: 'weavr_webhook_sync',
+      new_balance: (newBalance.available || 0) + (newBalance.blocked || 0) + (newBalance.reserved || 0),
       available_new: newBalance.available || 0,
       blocked_new: newBalance.blocked || 0,
       description: 'Balance updated via Weavr webhook'

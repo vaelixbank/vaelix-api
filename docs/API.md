@@ -1,6 +1,25 @@
 # Vaelix Bank API Endpoints
 
-This document describes the API endpoints available in the Vaelix Bank API. Endpoints are organized by functionality and include both database operations and external service integrations.
+This document describes the API endpoints available in the Vaelix Bank API. The API follows a "Ledger First" architecture where the local ledger is the single source of truth for all banking operations.
+
+## Architecture Overview
+
+### Ledger-First Design
+All banking operations are processed through the local ledger first. External integrations (like Weavr) are used only for regulatory compliance and external connectivity.
+
+```
+Transaction Flow:
+1. Client Request → 2. TransactionManager → 3. Local Ledger → 4. RegulatoryGateway (if external)
+```
+
+### Regulatory Gateway
+Weavr integration is limited to compliance-required operations:
+- IBAN generation and management
+- External payment transmission
+- Regulatory confirmation of external funds
+- Anonymized compliance reporting
+
+**All business logic, balances, and customer data remain in the local ledger.**
 
 ## Authentication (`/api/auth`)
 
@@ -62,31 +81,33 @@ This document describes the API endpoints available in the Vaelix Bank API. Endp
 
 ## IBAN Management
 
-Virtual IBANs (vIBAN) enable accounts to receive and send funds via wire transfers. As a regulated intermediary, Weavr provides the banking infrastructure while Vaelix Bank manages client relationships and data access.
+Virtual IBANs (vIBAN) enable accounts to receive and send funds via wire transfers while maintaining full control over banking data.
 
-### Architecture: Weavr as Regulated Intermediary
+### Architecture: Ledger-First with Regulatory Gateway
 
 ```
 ┌─────────────────┐    ┌─────────────┐    ┌─────────────────┐
-│  Vaelix Bank    │    │   Weavr      │    │  Public Market  │
-│  (Proprietary)  │◄──►│ (Regulated   │◄──►│  (Banks, Cards, │
-│  Client Mgmt    │    │  Banking)    │    │   Wire Xfers)   │
+│  Vaelix Bank    │    │ Regulatory  │    │  Public Market  │
+│  (Ledger First) │───►│ Gateway     │◄──►│  (Banks, Cards, │
+│  Single Truth   │    │ (Weavr)     │    │   Wire Xfers)   │
 └─────────────────┘    └─────────────┘    └─────────────────┘
 ```
 
-### Sensitive Data Retrieval Process
+### Process: Local Control with Regulatory Compliance
 
-1. **Client Registration**: Client data stored in Vaelix Bank database
-2. **Weavr Identity**: Client identity created in Weavr's regulated environment
-3. **Managed Account**: Account created in Weavr with banking capabilities
-4. **IBAN Assignment**: Weavr assigns virtual IBAN for wire transfers
-5. **Data Retrieval**: Vaelix Bank retrieves IBAN details from Weavr
-6. **Local Storage**: Sensitive data stored securely in local database
-7. **Client Access**: Client can use IBAN in public market transactions
+1. **Account Creation**: Account created in local ledger with full business data
+2. **Regulatory Sync**: Minimal account created in Weavr for compliance only
+3. **IBAN Generation**: Weavr generates IBAN through Regulatory Gateway
+4. **Local Storage**: IBAN stored in local database for client access
+5. **Transaction Control**: All transactions validated locally first
+6. **External Transmission**: Regulatory Gateway handles external connectivity
+7. **Audit Trail**: Complete transaction history maintained locally
 
-### IBAN Assignment Process
+**Key Principle**: Weavr provides regulatory infrastructure but does not store or control business data.
 
-#### Step 1: Create Account (Database)
+### IBAN Assignment Process (Ledger-First)
+
+#### Step 1: Create Account Locally
 ```http
 POST /api/accounts/db
 Content-Type: application/json
@@ -95,57 +116,72 @@ Authorization: Bearer <access_token>
 
 {
   "user_id": 123,
-  "account_number": "FR1234567890123456789012345",
-  "account_type": "checking",
+  "account_type": "current",
   "currency": "EUR"
 }
 ```
 
-#### Step 2: Synchronize with Weavr
+#### Step 2: Create Master Account with IBAN
 ```http
-POST /api/accounts
+POST /api/accounts/master
 Content-Type: application/json
-api_key: <weavr_api_key>
-auth_token: <weavr_auth_token>
+x-api-key: <weavr_api_key>
+Authorization: Bearer <weavr_auth_token>
 
 {
-  "profile_id": "profile_123",
-  "friendlyName": "Main Account",
-  "currency": "EUR"
+  "profile_id": "corporate_profile_123",
+  "user_id": 123,
+  "account_name": "Main Account",
+  "currency": "EUR",
+  "account_type": "current"
 }
-```
-
-#### Step 3: Assign IBAN
-```http
-POST /api/accounts/db/{account_id}/iban
-x-api-key: <weavr_api_key>
-auth_token: <weavr_auth_token>
 ```
 
 **Response:**
 ```json
 {
-  "message": "IBAN upgrade initiated successfully",
-  "account_id": 123,
-  "weavr_id": "weavr_account_456",
-  "status": "processing"
+  "local_account": {
+    "id": 123,
+    "balance": 1000000000000,
+    "iban": "FR1234567890123456789012345",
+    "bic": "BNPAFRPP"
+  },
+  "weavr_account": {
+    "id": "weavr_account_456"
+  },
+  "iban_upgrade": {
+    "state": "ALLOCATED"
+  },
+  "initial_balance_set": 1000000000000
 }
 ```
 
-#### Step 4: Retrieve IBAN Details
+#### Alternative: Generate IBAN Separately
 ```http
-GET /api/accounts/db/{account_id}/iban
-x-api-key: <weavr_api_key>
-auth_token: <weavr_auth_token>
+POST /api/regulatory/iban/generate
+Content-Type: application/json
+x-api-key: <api_key>
+Authorization: Bearer <token>
+
+{
+  "account_id": 123,
+  "country_code": "FR",
+  "holder_name": "John Doe"
+}
+```
+
+#### Step 3: Retrieve IBAN Details
+```http
+GET /api/regulatory/accounts/123/iban
+x-api-key: <api_key>
+Authorization: Bearer <token>
 ```
 
 **Response:**
 ```json
 {
-  "account_id": 123,
   "iban": "FR1234567890123456789012345",
-  "bic": "BNPAFRPP",
-  "state": "ALLOCATED"
+  "bic": "BNPAFRPP"
 }
 ```
 
@@ -365,122 +401,97 @@ Weavr automatically notifies of data changes and events:
 }
 ```
 
+## Regulatory Operations (`/api/regulatory`)
+
+The regulatory endpoints provide controlled access to Weavr for compliance-required operations only. All business logic and data management remains in the local ledger.
+
+### Transaction Processing
+- `POST /api/regulatory/transactions` - Process any transaction through central manager
+
+**Request:**
+```json
+{
+  "type": "internal_transfer",
+  "from_account_id": 123,
+  "to_account_id": 456,
+  "amount": 100.00,
+  "currency": "EUR",
+  "description": "Internal transfer"
+}
+```
+
+**Supported transaction types:**
+- `internal_transfer`: Between local accounts (100% local, no Weavr)
+- `external_send`: Send to external beneficiary (reserves funds locally, transmits via Weavr)
+- `external_receive`: Record incoming external payment
+- `balance_adjustment`: Administrative balance adjustments
+
+### IBAN Management
+- `POST /api/regulatory/iban/generate` - Generate IBAN for regulatory compliance
+- `GET /api/regulatory/accounts/:account_id/iban` - Get account IBAN details
+
+**Generate IBAN:**
+```http
+POST /api/regulatory/iban/generate
+Content-Type: application/json
+x-api-key: <api_key>
+Authorization: Bearer <token>
+
+{
+  "account_id": 123,
+  "country_code": "FR",
+  "holder_name": "John Doe"
+}
+```
+
+### External Payments
+- `POST /api/regulatory/payments/send` - Send payment to external beneficiary
+- `POST /api/regulatory/payments/confirm-receive` - Confirm external payment receipt
+
+**Send External Payment:**
+```http
+POST /api/regulatory/payments/send
+Content-Type: application/json
+x-api-key: <api_key>
+Authorization: Bearer <token>
+
+{
+  "from_account_id": 123,
+  "amount": 500.00,
+  "currency": "EUR",
+  "beneficiary_details": {
+    "name": "External Vendor",
+    "iban": "GB29NWBK60161331926819",
+    "bic": "NWBKGB2L"
+  },
+  "description": "Invoice payment"
+}
+```
+
+**Process:**
+1. Funds reserved in local ledger
+2. Payment transmitted via Regulatory Gateway (Weavr)
+3. Success: Transaction confirmed locally
+4. Failure: Funds automatically unblocked
+
+### Administrative Operations
+- `POST /api/regulatory/balances/adjust` - Administrative balance adjustments
+
+**Balance Adjustment:**
+```http
+POST /api/regulatory/balances/adjust
+Content-Type: application/json
+x-api-key: <server_api_key>
+Authorization: Bearer <admin_token>
+
+{
+  "account_id": 123,
+  "amount": 1000.00,
+  "description": "Initial deposit"
+}
+```
+
 ## Cards (`/api/cards`)
-
-- `GET /api/cards` - Get managed cards
-- `POST /api/cards` - Create managed card
-- `GET /api/cards/:id` - Get managed card
-- `PATCH /api/cards/:id` - Update managed card
-- `POST /api/cards/:id/block` - Block card
-- `POST /api/cards/:id/unblock` - Unblock card
-- `GET /api/cards/:id/statement` - Get card statement
-- `POST /api/cards/:id/upgrade` - Upgrade to physical card
-- `POST /api/cards/:id/activate` - Activate physical card
-- `POST /api/cards/:id/replace` - Replace card
-- `DELETE /api/cards/:id` - Remove card
-
-## Transactions (`/api/transactions`)
-
-- `GET /api/transactions` - Get transactions
-- `POST /api/transactions/send` - Send money
-- `POST /api/transactions/transfer` - Transfer between accounts
-- `POST /api/transactions/wire` - Outgoing wire transfer
-- `GET /api/transactions/:id` - Get transaction
-- `POST /api/transactions/bulk/send` - Bulk send
-- `POST /api/transactions/bulk/transfer` - Bulk transfer
-- `POST /api/transactions/bulk/wire` - Bulk wire transfers
-
-## Beneficiaries (`/api/beneficiaries`)
-
-- `GET /api/beneficiaries` - Get beneficiaries
-- `POST /api/beneficiaries` - Create beneficiary
-- `GET /api/beneficiaries/:id` - Get beneficiary
-- `PATCH /api/beneficiaries/:id` - Update beneficiary
-- `DELETE /api/beneficiaries/:id` - Delete beneficiary
-
-## Linked Accounts (`/api/linked-accounts`)
-
-- `GET /api/linked-accounts` - Get linked accounts
-- `POST /api/linked-accounts` - Create linked account
-- `GET /api/linked-accounts/:id` - Get linked account
-- `PATCH /api/linked-accounts/:id` - Update linked account
-- `DELETE /api/linked-accounts/:id` - Delete linked account
-
-## Bulk Operations (`/api/bulk`)
-
-- `POST /api/bulk/users` - Bulk user operations
-- `POST /api/bulk/accounts` - Bulk account operations
-- `POST /api/bulk/transactions` - Bulk transaction operations
-
-## API Keys (`/api/keys`)
-
-- `GET /api/keys` - Get API keys
-- `POST /api/keys` - Create API key
-- `GET /api/keys/:id` - Get API key
-- `PATCH /api/keys/:id` - Update API key
-- `DELETE /api/keys/:id` - Delete API key
-
-## Mobile Authentication (`/api/auth/mobile`)
-
-- `POST /api/auth/mobile/register` - Register new user
-- `POST /api/auth/mobile/login` - User login
-- `POST /api/auth/mobile/refresh` - Refresh access token
-- `POST /api/auth/mobile/logout` - Logout user
-- `POST /api/auth/mobile/verify/send` - Send verification code
-- `POST /api/auth/mobile/verify` - Verify code
-- `POST /api/auth/mobile/password-reset` - Request password reset
-- `POST /api/auth/mobile/password-reset/confirm` - Confirm password reset
-- `GET /api/auth/mobile/profile` - Get user profile
-
-## Password Management (`/api/passwords`)
-
-- `POST /api/passwords/reset` - Request password reset
-- `POST /api/passwords/reset/confirm` - Confirm password reset
-- `POST /api/passwords/change` - Change password
-
-## SCA (Strong Customer Authentication) (`/api/sca`)
-
-- `POST /api/sca/challenge` - Create SCA challenge
-- `POST /api/sca/verify` - Verify SCA challenge
-- `GET /api/sca/:id` - Get SCA challenge
-
-## Corporates (`/api/corporates`)
-
-- `GET /api/corporates` - Get corporate users
-- `POST /api/corporates` - Create corporate user
-- `GET /api/corporates/:id` - Get corporate user
-- `PATCH /api/corporates/:id` - Update corporate user
-- `DELETE /api/corporates/:id` - Delete corporate user
-
-## Consumers (`/api/consumers`)
-
-- `GET /api/consumers` - Get consumer users
-- `POST /api/consumers` - Create consumer user
-- `GET /api/consumers/:id` - Get consumer user
-- `PATCH /api/consumers/:id` - Update consumer user
-- `DELETE /api/consumers/:id` - Delete consumer user
-
-## Authentication & Headers
-
-### Mobile Authentication
-
-Mobile endpoints use JWT-based authentication:
-
-- `POST /api/auth/mobile/register` - No authentication required
-- `POST /api/auth/mobile/login` - No authentication required
-- `POST /api/auth/mobile/refresh` - No authentication required
-- `POST /api/auth/mobile/password-reset` - No authentication required
-- `POST /api/auth/mobile/password-reset/confirm` - No authentication required
-
-All other mobile endpoints require:
-- `Authorization: Bearer <access_token>` header
-- `x-device-id: <device_id>` header
-
-### Weavr API Authentication
-
-Weavr-integrated endpoints require:
-- `x-api-key` or `api_key` header
-- `authorization` or `auth_token` header (for authenticated requests)
 
 ### Database Operations
 

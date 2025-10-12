@@ -16,6 +16,7 @@ import transactionsRoutes from './routes/transactions.Routes';
 import bulkRoutes from './routes/bulk.Routes';
 import apiKeysRoutes from './routes/apiKeys.Routes';
 import mobileAuthRoutes from './routes/mobileAuth.Routes';
+import regulatoryRoutes from './routes/regulatory.Routes';
 import { logger } from './utils/logger';
 
 const app = express();
@@ -78,6 +79,7 @@ app.use('/api/transactions', transactionsRoutes);
 app.use('/api/bulk', bulkRoutes);
 app.use('/api/keys', apiKeysRoutes);
 app.use('/api/auth/mobile', mobileAuthRoutes);
+app.use('/api/regulatory', regulatoryRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

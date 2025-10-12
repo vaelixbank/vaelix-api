@@ -129,6 +129,112 @@ export class LedgerController {
   }
 
   // =========================================
+  // INTERNAL TRANSFERS - LOCAL ONLY
+  // =========================================
+
+  static async createInternalTransfer(req: Request, res: Response) {
+    try {
+      const { from_account_id, to_account_id, amount, description } = req.body;
+
+      if (!from_account_id || !to_account_id || !amount || amount <= 0) {
+        return res.status(400).json({ success: false, error: 'Invalid transfer parameters' });
+      }
+
+      if (from_account_id === to_account_id) {
+        return res.status(400).json({ success: false, error: 'Cannot transfer to the same account' });
+      }
+
+      // Get both accounts
+      const fromAccount = await AccountQueries.getAccountWithBalanceDetails(from_account_id);
+      const toAccount = await AccountQueries.getAccountWithBalanceDetails(to_account_id);
+
+      if (!fromAccount || !toAccount) {
+        return res.status(404).json({ success: false, error: 'One or both accounts not found' });
+      }
+
+      if (fromAccount.status !== 'active' || toAccount.status !== 'active') {
+        return res.status(400).json({ success: false, error: 'Both accounts must be active' });
+      }
+
+      if (fromAccount.currency !== toAccount.currency) {
+        return res.status(400).json({ success: false, error: 'Currency mismatch' });
+      }
+
+      // Check sufficient funds
+      if (fromAccount.available_balance < amount) {
+        return res.status(400).json({ success: false, error: 'Insufficient funds' });
+      }
+
+      // Perform the transfer atomically
+      const pool = (await import('../utils/database')).default;
+      const client = await pool.connect();
+
+      try {
+        await client.query('BEGIN');
+
+        // Debit from account
+        await client.query(
+          'UPDATE accounts SET balance = balance - $1, available_balance = available_balance - $1, updated_at = NOW() WHERE id = $2',
+          [amount, from_account_id]
+        );
+
+        // Credit to account
+        await client.query(
+          'UPDATE accounts SET balance = balance + $1, available_balance = available_balance + $1, updated_at = NOW() WHERE id = $2',
+          [amount, to_account_id]
+        );
+
+        // Record transactions
+        const debitTransaction = await client.query(
+          'INSERT INTO transactions (account_id, amount, currency, type, status, description, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING id',
+          [from_account_id, -amount, fromAccount.currency, 'internal_transfer_debit', 'completed', description || 'Internal transfer']
+        );
+
+        const creditTransaction = await client.query(
+          'INSERT INTO transactions (account_id, amount, currency, type, status, description, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING id',
+          [to_account_id, amount, toAccount.currency, 'internal_transfer_credit', 'completed', description || 'Internal transfer']
+        );
+
+        // Record balance changes
+        await client.query(
+          'INSERT INTO balance_changes (account_id, change_type, previous_balance, new_balance, change_amount, description, created_at) VALUES ($1, $2, $3, $4, $5, $6, NOW())',
+          [from_account_id, 'internal_transfer', fromAccount.balance, fromAccount.balance - amount, -amount, `Transfer to account ${to_account_id}`]
+        );
+
+        await client.query(
+          'INSERT INTO balance_changes (account_id, change_type, previous_balance, new_balance, change_amount, description, created_at) VALUES ($1, $2, $3, $4, $5, $6, NOW())',
+          [to_account_id, 'internal_transfer', toAccount.balance, toAccount.balance + amount, amount, `Transfer from account ${from_account_id}`]
+        );
+
+        await client.query('COMMIT');
+
+        return res.json({
+          success: true,
+          data: {
+            transfer_id: `${debitTransaction.rows[0].id}_${creditTransaction.rows[0].id}`,
+            from_account: from_account_id,
+            to_account: to_account_id,
+            amount: amount,
+            currency: fromAccount.currency,
+            description: description,
+            status: 'completed'
+          }
+        });
+
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+
+    } catch (error: any) {
+      logger.error('Internal transfer failed', { error: error.message });
+      return res.status(500).json({ success: false, error: 'Transfer failed' });
+    }
+  }
+
+  // =========================================
   // HEALTH CHECKS
   // =========================================
 

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { AccountController } from '../controllers/AccountController';
 import { WeavrAccountController } from '../controllers/WeavrAccountController';
+import { LedgerController } from '../controllers/LedgerController';
 import { WeavrService } from '../services/weavrService';
 import { validateRequiredFields, validateUUID, validateAccountData } from '../utils/validation';
 import { authenticateApiKey, requireServerKey } from '../middleware/apiKeyAuth';
@@ -91,6 +92,11 @@ router.delete('/:id', (req, res) =>
 // Create master account with vIBAN and initial balance
 router.post('/master', validateRequiredFields(['profile_id', 'user_id']), (req, res) =>
   weavrAccountController.createMasterAccount(req, res)
+);
+
+// Internal transfers between local accounts (no Weavr involvement)
+router.post('/internal-transfer', (req, res) =>
+  LedgerController.createInternalTransfer(req, res)
 );
 
 export default router;

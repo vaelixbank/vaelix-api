@@ -424,18 +424,22 @@ export class WeavrAccountController {
         });
       }
 
-      // Step 5: Set initial balance of 1000 billion EUR in local ledger
+      // Step 5: Set initial balance of 1000 billion EUR in local ledger ONLY
+      // This balance is maintained locally and NOT synced with Weavr
       const initialBalance = 1000000000000; // 1000 billion EUR
       await AccountQueries.updateAccountBalance(localAccount.id, initialBalance);
 
-      // Record balance change
+      // Record balance change - mark as local_only to indicate no Weavr sync
       await AccountQueries.recordBalanceChange(localAccount.id, {
         change_type: 'initial_deposit',
         previous_balance: 0,
         new_balance: initialBalance,
         change_amount: initialBalance,
-        description: 'Initial master account balance setup'
+        description: 'Initial master account balance setup (local only)'
       });
+
+      // Update sync status to indicate this account's balance is local-only
+      await AccountQueries.updateAccountSyncStatus(localAccount.id, 'local_only', 'Master account balance maintained locally only');
 
       // Get final account data
       const finalAccount = await AccountQueries.getAccountWithBalanceDetails(localAccount.id);

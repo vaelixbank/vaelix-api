@@ -6,7 +6,13 @@ The Vaelix Bank API is a comprehensive banking and financial services API built 
 
 ## Architecture
 
-The application follows a modular architecture with the following main components:
+The application follows a **"Ledger First" architecture** where the local ledger is the single source of truth for all banking operations. The system is designed with clear separation between core banking functions and regulatory compliance.
+
+### Core Components
+
+- **Core Services** (`app/core/`):
+  - `TransactionManager`: Central orchestrator for all transaction types
+  - `RegulatoryGateway`: Limited interface to Weavr for regulatory compliance only
 
 - **Controllers**: Handle business logic and API responses
 - **Models**: Define data structures and database schemas
@@ -15,6 +21,48 @@ The application follows a modular architecture with the following main component
 - **Middleware**: Handle authentication, authorization, and request processing
 - **Queries**: Database query functions
 - **Utils**: Utility functions for logging, database connections, validation, etc.
+
+### Architecture Principle: Ledger as Single Source of Truth
+
+```
+┌─────────────────────────────────────┐
+│         Vaelix Bank API              │
+│                                     │
+│  ┌─────────────┐  ┌─────────────┐   │
+│  │ Transaction │  │ Regulatory  │   │
+│  │ Manager     │  │ Gateway     │   │
+│  │ (Local Core)│  │ (External)  │   │
+│  └─────────────┘  └─────────────┘   │
+│         │                   │       │
+│         └─────────┬─────────┘       │
+│                   │                 │
+│            ┌─────────────┐          │
+│            │   Ledger    │          │
+│            │ (PostgreSQL)│          │
+│            │ Single Truth│          │
+│            └─────────────┘          │
+└─────────────────────────────────────┘
+                    │
+                    ▼
+           ┌─────────────┐
+           │ Regulatory  │
+           │ Gateway     │
+           │ (Weavr)     │
+           └─────────────┘
+```
+
+**Local Ledger Controls:**
+- ✅ Account balances and transactions
+- ✅ Business logic and validation
+- ✅ Customer data and relationships
+- ✅ Internal transfers (100% local)
+- ✅ Audit trails and compliance reporting
+
+**Regulatory Gateway (Weavr) Limited to:**
+- ✅ IBAN generation for compliance
+- ✅ Transmission of external payments
+- ✅ Reception confirmation of external funds
+- ✅ Regulatory reporting (anonymized)
 
 ## Main Entry Point
 
@@ -42,21 +90,32 @@ Configuration is managed in `app/config/index.ts` with environment variables for
 
 ## API Endpoints
 
-The API provides endpoints for:
+The API provides endpoints organized by functionality:
 
-- Authentication (`/api/auth`)
-- Password management (`/api/passwords`)
-- Strong Customer Authentication (`/api/sca`)
-- Corporate and consumer user management (`/api/corporates`, `/api/consumers`)
-- User profiles (`/api/users`)
-- Beneficiaries (`/api/beneficiaries`)
-- Accounts (`/api/accounts`)
-- Cards (`/api/cards`)
-- Linked accounts (`/api/linked-accounts`)
-- Transactions (`/api/transactions`)
-- Bulk operations (`/api/bulk`)
-- API keys (`/api/keys`)
-- Mobile authentication (`/api/auth/mobile`)
+### Core Banking Operations
+- **Authentication** (`/api/auth`) - User login, logout, token management
+- **Password Management** (`/api/passwords`) - Password operations and recovery
+- **Strong Customer Authentication** (`/api/sca`) - SCA compliance
+- **User Management** (`/api/users`, `/api/corporates`, `/api/consumers`) - User profiles and KYC
+- **Accounts** (`/api/accounts`) - Account management and ledger operations
+- **Cards** (`/api/cards`) - Card issuance and management
+- **Beneficiaries** (`/api/beneficiaries`) - Payment beneficiary management
+
+### Transaction Operations
+- **Transactions** (`/api/transactions`) - External transaction processing
+- **Bulk Operations** (`/api/bulk`) - Bulk transaction processing
+- **Linked Accounts** (`/api/linked-accounts`) - External account linking
+
+### Regulatory Compliance (New)
+- **Regulatory Gateway** (`/api/regulatory`) - Limited Weavr integration for compliance
+  - Transaction processing through central manager
+  - IBAN generation and management
+  - External payment transmission
+  - Regulatory reporting
+
+### Administrative
+- **API Keys** (`/api/keys`) - API key management
+- **Mobile Authentication** (`/api/auth/mobile`) - Mobile-specific auth flows
 
 ## Health Checks
 
@@ -74,8 +133,20 @@ The API provides endpoints for:
 
 ## External Integrations
 
-- **Weavr**: Payment and card services integration
-- Database: PostgreSQL for data persistence
+### Regulatory Gateway (Weavr)
+Weavr serves as a **regulated intermediary** for compliance-required operations only:
+
+- **IBAN Generation**: Creates virtual IBANs for account compliance
+- **External Payment Transmission**: Routes payments to public banking networks
+- **Regulatory Confirmation**: Validates external fund receipts
+- **Compliance Reporting**: Provides anonymized regulatory reports
+
+**Important**: Weavr does **NOT** store business data, balances, or customer information. All core banking data remains in the local ledger.
+
+### Database
+- **PostgreSQL**: Primary data store for all banking operations
+- **Ledger-First Design**: All transactions and balances managed locally
+- **Audit Trails**: Complete transaction history and compliance logs
 
 ## Development
 
