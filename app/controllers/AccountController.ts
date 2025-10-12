@@ -168,4 +168,77 @@ export class AccountController {
       res.status(500).json({ error: 'Internal server error' });
     }
   }
+
+  // =========================================
+  // VIRTUAL IBAN (vIBAN) MANAGEMENT
+  // =========================================
+
+  static async upgradeAccountToIBAN(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const accountId = parseInt(id);
+
+      // Get API credentials from headers or environment
+      const apiKey = req.headers['x-api-key'] as string || process.env.WEAVR_API_KEY;
+      const authToken = req.headers['auth_token'] as string;
+
+      if (!apiKey || !authToken) {
+        return res.status(400).json({ error: 'API key and auth token required' });
+      }
+
+      const { weavrSyncService } = await import('../services/weavrSyncService');
+
+      const result = await weavrSyncService.upgradeAccountToIBAN(accountId, apiKey, authToken);
+
+      if (result.success) {
+        res.json({
+          message: 'IBAN upgrade initiated successfully',
+          account_id: accountId,
+          weavr_id: result.weavrId,
+          status: 'processing'
+        });
+      } else {
+        res.status(400).json({
+          error: 'IBAN upgrade failed',
+          details: result.error
+        });
+      }
+    } catch (error) {
+      console.error('Error upgrading account to IBAN:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async getAccountIBAN(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const accountId = parseInt(id);
+
+      // Get API credentials from headers or environment
+      const apiKey = req.headers['x-api-key'] as string || process.env.WEAVR_API_KEY;
+      const authToken = req.headers['auth_token'] as string;
+
+      if (!apiKey || !authToken) {
+        return res.status(400).json({ error: 'API key and auth token required' });
+      }
+
+      const { weavrSyncService } = await import('../services/weavrSyncService');
+
+      const ibanData = await weavrSyncService.getAccountIBAN(accountId, apiKey, authToken);
+
+      if (ibanData) {
+        res.json({
+          account_id: accountId,
+          iban: ibanData.iban,
+          bic: ibanData.bic,
+          state: ibanData.state
+        });
+      } else {
+        res.status(404).json({ error: 'IBAN not found or account not synced with Weavr' });
+      }
+    } catch (error) {
+      console.error('Error fetching account IBAN:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
 }

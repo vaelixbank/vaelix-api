@@ -44,6 +44,10 @@ This document describes the API endpoints available in the Vaelix Bank API. Endp
 - `PATCH /api/accounts/db/:id` - Update account
 - `DELETE /api/accounts/db/:id` - Delete account
 
+### Database IBAN Operations
+- `POST /api/accounts/db/:id/iban` - Upgrade account with IBAN
+- `GET /api/accounts/db/:id/iban` - Get account IBAN details
+
 ### Weavr Operations
 - `GET /api/accounts` - Get managed accounts
 - `POST /api/accounts` - Create managed account
@@ -55,6 +59,172 @@ This document describes the API endpoints available in the Vaelix Bank API. Endp
 - `POST /api/accounts/:id/iban` - Upgrade with IBAN
 - `GET /api/accounts/:id/iban` - Get account IBAN
 - `DELETE /api/accounts/:id` - Remove account
+
+## IBAN Management
+
+Virtual IBANs (vIBAN) enable accounts to receive and send funds via wire transfers. The IBAN management system integrates with Weavr to provide banking capabilities.
+
+### How IBANs Work
+
+1. **Account Creation**: When a user creates an account, it's initially stored in the local database
+2. **Weavr Synchronization**: The account is synchronized with Weavr to create a managed account
+3. **IBAN Assignment**: An IBAN is assigned to the managed account, enabling wire transfer capabilities
+4. **Database Association**: The IBAN details are stored locally and associated with the account
+
+### IBAN Assignment Process
+
+#### Step 1: Create Account (Database)
+```http
+POST /api/accounts/db
+Content-Type: application/json
+x-api-key: <server_api_key>
+Authorization: Bearer <access_token>
+
+{
+  "user_id": 123,
+  "account_number": "FR1234567890123456789012345",
+  "account_type": "checking",
+  "currency": "EUR"
+}
+```
+
+#### Step 2: Synchronize with Weavr
+```http
+POST /api/accounts
+Content-Type: application/json
+api_key: <weavr_api_key>
+auth_token: <weavr_auth_token>
+
+{
+  "profile_id": "profile_123",
+  "friendlyName": "Main Account",
+  "currency": "EUR"
+}
+```
+
+#### Step 3: Assign IBAN
+```http
+POST /api/accounts/db/{account_id}/iban
+x-api-key: <weavr_api_key>
+auth_token: <weavr_auth_token>
+```
+
+**Response:**
+```json
+{
+  "message": "IBAN upgrade initiated successfully",
+  "account_id": 123,
+  "weavr_id": "weavr_account_456",
+  "status": "processing"
+}
+```
+
+#### Step 4: Retrieve IBAN Details
+```http
+GET /api/accounts/db/{account_id}/iban
+x-api-key: <weavr_api_key>
+auth_token: <weavr_auth_token>
+```
+
+**Response:**
+```json
+{
+  "account_id": 123,
+  "iban": "FR1234567890123456789012345",
+  "bic": "BNPAFRPP",
+  "state": "ALLOCATED"
+}
+```
+
+### IBAN States
+
+- **`UNALLOCATED`**: No IBAN assigned yet
+- **`PENDING_ALLOCATION`**: IBAN assignment in progress
+- **`ALLOCATED`**: IBAN is active and ready for use
+
+### Using IBANs for Transactions
+
+Once an IBAN is allocated, the account can:
+
+#### Receive Funds (Incoming Wire Transfers)
+```http
+POST /api/transactions/wire
+Content-Type: application/json
+x-api-key: <weavr_api_key>
+auth_token: <weavr_auth_token>
+
+{
+  "source": {
+    "iban": "GB29 NWBK 6016 1331 9268 19",
+    "bic": "NWBKGB2L"
+  },
+  "destination": {
+    "iban": "FR1234567890123456789012345",
+    "bic": "BNPAFRPP"
+  },
+  "amount": 1000.00,
+  "currency": "EUR",
+  "description": "Payment received"
+}
+```
+
+#### Send Funds (Outgoing Wire Transfers)
+```http
+POST /api/transactions/wire
+Content-Type: application/json
+x-api-key: <weavr_api_key>
+auth_token: <weavr_auth_token>
+
+{
+  "source": {
+    "iban": "FR1234567890123456789012345",
+    "bic": "BNPAFRPP"
+  },
+  "destination": {
+    "iban": "GB29 NWBK 6016 1331 9268 19",
+    "bic": "NWBKGB2L"
+  },
+  "amount": 500.00,
+  "currency": "EUR",
+  "description": "Payment sent"
+}
+```
+
+### Database Schema
+
+IBAN information is stored in the `accounts` table:
+
+```sql
+ALTER TABLE accounts ADD COLUMN iban VARCHAR(34);
+ALTER TABLE accounts ADD COLUMN bic VARCHAR(11);
+ALTER TABLE accounts ADD COLUMN weavr_id VARCHAR(255);
+ALTER TABLE accounts ADD COLUMN sync_status VARCHAR(50) DEFAULT 'pending';
+ALTER TABLE accounts ADD COLUMN last_weavr_sync TIMESTAMP;
+```
+
+### Error Handling
+
+Common IBAN-related errors:
+
+- **`ACCOUNT_NOT_SYNCED`**: Account must be synchronized with Weavr first
+- **`IBAN_ALLOCATION_FAILED`**: IBAN assignment failed (retry later)
+- **`INVALID_CREDENTIALS`**: Weavr API credentials are invalid
+- **`INSUFFICIENT_PERMISSIONS`**: API key lacks IBAN management permissions
+
+### Webhook Integration
+
+IBAN status changes are automatically updated via Weavr webhooks:
+
+```json
+{
+  "type": "managed_account.iban.allocated",
+  "data": {
+    "id": "weavr_account_456",
+    "iban": "FR1234567890123456789012345",
+    "bic": "BNPAFRPP"
+  }
+}
+```
 
 ## Cards (`/api/cards`)
 

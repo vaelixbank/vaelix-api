@@ -205,6 +205,120 @@ export class WeavrSyncService {
   }
 
   // =========================================
+  // VIRTUAL IBAN (vIBAN) MANAGEMENT
+  // =========================================
+
+  async upgradeAccountToIBAN(localAccountId: number, apiKey: string, authToken: string): Promise<SyncResult> {
+    try {
+      logger.info('Starting IBAN upgrade for account', { localAccountId });
+
+      // Get local account data
+      const account = await AccountQueries.getAccountById(localAccountId);
+      if (!account) {
+        return { success: false, error: 'Account not found locally' };
+      }
+
+      if (!account.weavr_id) {
+        return { success: false, error: 'Account not synced with Weavr yet' };
+      }
+
+      // Check if IBAN already exists
+      if (account.iban) {
+        logger.info('Account already has IBAN', { localAccountId, iban: account.iban });
+        return { success: true, weavrId: account.weavr_id };
+      }
+
+      // Upgrade account with IBAN
+      const ibanResult = await this.weavrService.makeRequest(
+        'POST',
+        `/multi/managed_accounts/${account.weavr_id}/iban`,
+        {},
+        apiKey,
+        authToken
+      );
+
+      // Update local account with IBAN data
+      if (ibanResult.bankAccountDetails && ibanResult.bankAccountDetails.length > 0) {
+        const ibanDetails = ibanResult.bankAccountDetails[0];
+        await AccountQueries.updateAccountWithWeavrData(localAccountId, {
+          iban: ibanDetails.details?.iban,
+          bic: ibanDetails.details?.bankIdentifierCode,
+          last_weavr_sync: new Date(),
+          sync_status: ibanResult.state === 'ALLOCATED' ? 'synced' : 'pending_iban'
+        });
+
+        logger.info('IBAN upgrade completed', {
+          localAccountId,
+          iban: ibanDetails.details?.iban,
+          state: ibanResult.state
+        });
+      } else {
+        // IBAN upgrade initiated but not yet allocated
+        await AccountQueries.updateAccountSyncStatus(localAccountId, 'pending_iban', 'IBAN allocation in progress');
+        logger.info('IBAN upgrade initiated, waiting for allocation', { localAccountId });
+      }
+
+      return { success: true, weavrId: account.weavr_id };
+
+    } catch (error: any) {
+      logger.error('IBAN upgrade failed', { localAccountId, error: error.message });
+
+      // Mark as failed in local DB
+      await AccountQueries.updateAccountSyncStatus(localAccountId, 'iban_failed', error.message);
+
+      return {
+        success: false,
+        error: error.message,
+        retryable: this.isRetryableError(error)
+      };
+    }
+  }
+
+  async getAccountIBAN(localAccountId: number, apiKey: string, authToken: string): Promise<{ iban?: string; bic?: string; state: string } | null> {
+    try {
+      // Get local account data
+      const account = await AccountQueries.getAccountById(localAccountId);
+      if (!account?.weavr_id) {
+        return null;
+      }
+
+      // Get IBAN details from Weavr
+      const ibanResult = await this.weavrService.makeRequest(
+        'GET',
+        `/multi/managed_accounts/${account.weavr_id}/iban`,
+        undefined,
+        apiKey,
+        authToken
+      );
+
+      // Update local account if IBAN is now available
+      if (ibanResult.bankAccountDetails && ibanResult.bankAccountDetails.length > 0) {
+        const ibanDetails = ibanResult.bankAccountDetails[0];
+        if (ibanDetails.details?.iban && (!account.iban || ibanResult.state === 'ALLOCATED')) {
+          await AccountQueries.updateAccountWithWeavrData(localAccountId, {
+            iban: ibanDetails.details.iban,
+            bic: ibanDetails.details.bankIdentifierCode,
+            last_weavr_sync: new Date(),
+            sync_status: ibanResult.state === 'ALLOCATED' ? 'synced' : 'pending_iban'
+          });
+        }
+
+        return {
+          iban: ibanDetails.details?.iban,
+          bic: ibanDetails.details?.bankIdentifierCode,
+          state: ibanResult.state
+        };
+      }
+
+      return { state: ibanResult.state };
+
+    } catch (error: any) {
+      logger.error('Failed to get account IBAN', { localAccountId, error: error.message });
+      return null;
+    }
+  }
+
+  // =========================================
   // TRANSACTION SYNCHRONIZATION
   // =========================================
 

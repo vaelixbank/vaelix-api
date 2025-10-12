@@ -9,11 +9,67 @@ A banking API built on top of Weavr's Multi API, providing managed accounts and 
 - Corporate and Consumer Identity Management with KYC/KYB
 - Authorised Users Management
 - Beneficiary Management
+- **IBAN Management**: Virtual IBAN assignment for wire transfer capabilities
 - Managed Accounts and Cards
 - Linked Accounts
 - Transaction Processing (Sends, Transfers, Wire Transfers)
 - Bulk Operations
 - Production-ready with error handling and logging
+
+## IBAN Management
+
+Vaelix Bank supports Virtual IBAN (vIBAN) assignment to enable wire transfer capabilities for accounts.
+
+### Quick Start with IBANs
+
+1. **Create Account**: Create a user account in the database
+2. **Sync with Weavr**: Synchronize the account with Weavr's managed accounts
+3. **Assign IBAN**: Request IBAN assignment for the account
+4. **Use for Transactions**: The account can now receive and send wire transfers
+
+### IBAN Assignment Example
+
+```bash
+# 1. Create account
+curl -X POST http://localhost:3000/api/accounts/db \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-server-key" \
+  -d '{"user_id": 123, "account_type": "checking", "currency": "EUR"}'
+
+# 2. Sync with Weavr (creates managed account)
+curl -X POST http://localhost:3000/api/accounts \
+  -H "api_key: your-weavr-key" \
+  -H "auth_token: your-auth-token" \
+  -d '{"profile_id": "profile_123", "friendlyName": "Main Account"}'
+
+# 3. Assign IBAN
+curl -X POST http://localhost:3000/api/accounts/db/123/iban \
+  -H "x-api-key: your-weavr-key" \
+  -H "auth_token: your-auth-token"
+
+# 4. Get IBAN details
+curl http://localhost:3000/api/accounts/db/123/iban \
+  -H "x-api-key: your-weavr-key" \
+  -H "auth_token: your-auth-token"
+```
+
+**Response:**
+```json
+{
+  "account_id": 123,
+  "iban": "FR1234567890123456789012345",
+  "bic": "BNPAFRPP",
+  "state": "ALLOCATED"
+}
+```
+
+### IBAN States
+
+- `UNALLOCATED`: No IBAN assigned
+- `PENDING_ALLOCATION`: IBAN being assigned
+- `ALLOCATED`: IBAN ready for use
+
+For detailed documentation, see [API.md](docs/API.md#iban-management).
 
 ## Installation
 

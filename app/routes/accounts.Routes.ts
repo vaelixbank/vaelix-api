@@ -29,7 +29,13 @@ router.get('/db/:id', AccountController.getAccountById);
 router.patch('/db/:id', AccountController.updateAccount);
 
 // Delete an account (DB)
-router.delete('/db/:id', AccountController.deleteAccount);
+router.delete('/db/:id', AccountController.closeAccount);
+
+// Upgrade account to IBAN (DB)
+router.post('/db/:id/iban', AccountController.upgradeAccountToIBAN);
+
+// Get account IBAN (DB)
+router.get('/db/:id/iban', AccountController.getAccountIBAN);
 
 // Weavr Operations
 // Get all managed accounts
