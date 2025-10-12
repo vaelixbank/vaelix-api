@@ -337,4 +337,120 @@ export class WeavrAccountController {
       );
     }
   }
+
+  async createMasterAccount(req: Request, res: Response) {
+    try {
+      const { profile_id, user_id, account_name = 'Master Account', currency = 'EUR' } = req.body;
+      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
+
+      if (!profile_id || !user_id) {
+        return ApiResponseHandler.error(res, 'profile_id and user_id are required', 'VALIDATION_ERROR', 400);
+      }
+
+      logger.info('Creating master account', { profile_id, user_id, account_name });
+
+      // Step 1: Create account in local database
+      const { AccountQueries } = await import('../queries/accountQueries');
+      const localAccount = await AccountQueries.createAccount(
+        user_id,
+        '', // account_number (empty for master)
+        'master', // account_type
+        currency,
+        0, // initial balance
+        'active'
+      );
+
+      // Step 2: Create Weavr managed account
+      const weavrAccountData = {
+        profile_id,
+        name: account_name,
+        tag: `master_${localAccount.id}`
+      };
+
+      logger.weavrRequest('POST', '/multi/managed_accounts', req.headers['x-request-id'] as string);
+
+      const weavrResult = await this.weavrService.makeRequest(
+        'POST',
+        '/multi/managed_accounts',
+        weavrAccountData,
+        apiKey,
+        authToken
+      );
+
+      logger.weavrResponse('POST', '/multi/managed_accounts', 201, req.headers['x-request-id'] as string);
+
+      // Step 3: Update local account with Weavr data
+      await AccountQueries.updateAccountWithWeavrData(localAccount.id, {
+        weavr_id: weavrResult.id,
+        last_weavr_sync: new Date(),
+        sync_status: 'synced'
+      });
+
+      // Update weavr_profile_id and account_name separately
+      const pool = (await import('../utils/database')).default;
+      await pool.query(
+        'UPDATE accounts SET weavr_profile_id = $1, account_name = $2 WHERE id = $3',
+        [profile_id, account_name, localAccount.id]
+      );
+
+      // Step 4: Upgrade to vIBAN
+      logger.weavrRequest('POST', `/multi/managed_accounts/${weavrResult.id}/iban`, req.headers['x-request-id'] as string);
+
+      const ibanResult = await this.weavrService.makeRequest(
+        'POST',
+        `/multi/managed_accounts/${weavrResult.id}/iban`,
+        {},
+        apiKey,
+        authToken
+      );
+
+      logger.weavrResponse('POST', `/multi/managed_accounts/${weavrResult.id}/iban`, 200, req.headers['x-request-id'] as string);
+
+      // Update local account with IBAN if available
+      if (ibanResult.bankAccountDetails && ibanResult.bankAccountDetails.length > 0) {
+        const ibanDetails = ibanResult.bankAccountDetails[0];
+        await AccountQueries.updateAccountWithWeavrData(localAccount.id, {
+          iban: ibanDetails.details?.iban,
+          bic: ibanDetails.details?.bankIdentifierCode,
+          sync_status: ibanResult.state === 'ALLOCATED' ? 'synced' : 'pending_iban'
+        });
+      }
+
+      // Step 5: Set initial balance of 1000 billion EUR in local ledger
+      const initialBalance = 1000000000000; // 1000 billion EUR
+      await AccountQueries.updateAccountBalance(localAccount.id, initialBalance);
+
+      // Record balance change
+      await AccountQueries.recordBalanceChange(localAccount.id, {
+        change_type: 'initial_deposit',
+        previous_balance: 0,
+        new_balance: initialBalance,
+        change_amount: initialBalance,
+        description: 'Initial master account balance setup'
+      });
+
+      // Get final account data
+      const finalAccount = await AccountQueries.getAccountWithBalanceDetails(localAccount.id);
+
+      return ApiResponseHandler.created(res, {
+        local_account: finalAccount,
+        weavr_account: weavrResult,
+        iban_upgrade: ibanResult,
+        initial_balance_set: initialBalance
+      });
+
+    } catch (error: any) {
+      logger.error('Master account creation failed', { error: error.message });
+
+      const weavrError = parseWeavrError(error);
+      return ApiResponseHandler.error(
+        res,
+        weavrError.message,
+        weavrError.code,
+        getWeavrErrorStatus(weavrError),
+        weavrError.details
+      );
+    }
+  }
 }

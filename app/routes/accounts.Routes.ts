@@ -88,4 +88,9 @@ router.delete('/:id', (req, res) =>
   weavrAccountController.removeAccount(req, res)
 );
 
+// Create master account with vIBAN and initial balance
+router.post('/master', validateRequiredFields(['profile_id', 'user_id']), (req, res) =>
+  weavrAccountController.createMasterAccount(req, res)
+);
+
 export default router;
