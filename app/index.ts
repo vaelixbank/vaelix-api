@@ -59,11 +59,6 @@ app.get('/', (req, res) => {
   res.json({ message: 'Vaelix Bank API', version: '1.0.0' });
 });
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/passwords', passwordsRoutes);
@@ -103,7 +98,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 // 404 handler
-app.use('*', (req, res) => {
+app.use((req, res) => {
   const requestId = req.headers['x-request-id'] as string;
   logger.warn('Route not found', { url: req.originalUrl, method: req.method }, requestId);
 

@@ -7,7 +7,8 @@
     "build": "tsc",
     "start": "NODE_ENV=production node dist/index.js",
     "dev": "ts-node app/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "init-master-iban": "node init_master_account_iban.js"
   },
   "repository": {
     "type": "git",

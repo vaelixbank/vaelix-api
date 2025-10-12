@@ -432,31 +432,6 @@ CREATE TABLE bulk_operations (
     completed_at TIMESTAMP
 );
 
--- 44. Consumers
-CREATE TABLE consumers (
-    id VARCHAR(100) PRIMARY KEY,
-    user_id INT REFERENCES users(id),
-    type VARCHAR(20) DEFAULT 'consumer',
-    state VARCHAR(50),
-    root_user JSONB,
-    kyc JSONB,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- 45. Corporates
-CREATE TABLE corporates (
-    id VARCHAR(100) PRIMARY KEY,
-    user_id INT REFERENCES users(id),
-    type VARCHAR(20) DEFAULT 'corporate',
-    state VARCHAR(50),
-    root_user JSONB,
-    kyb JSONB,
-    company JSONB,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
 -- 46. Linked Accounts
 CREATE TABLE linked_accounts (
     id VARCHAR(100) PRIMARY KEY,
