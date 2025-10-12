@@ -6,7 +6,19 @@ export interface Account {
   account_type?: string;
   currency: string;
   balance: number;
+  available_balance: number;
+  blocked_balance: number;
+  reserved_balance: number;
   status: string;
+  // Weavr integration fields
+  weavr_id?: string;
+  weavr_profile_id?: string;
+  iban?: string;
+  bic?: string;
+  account_name?: string;
+  // Sync fields
+  last_weavr_sync?: Date;
+  sync_status: string;
   created_at: Date;
   updated_at: Date;
 }

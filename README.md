@@ -2,6 +2,24 @@
 
 A banking API built on top of Weavr's Multi API, providing managed accounts and cards functionality.
 
+## Architecture Overview
+
+Vaelix Bank uses **Weavr as a regulated intermediary** between our proprietary infrastructure and the public market:
+
+```
+┌─────────────────┐    ┌─────────────┐    ┌─────────────────┐
+│  Vaelix Bank    │    │   Weavr      │    │  Public Market  │
+│  (Proprietary)  │◄──►│ (Regulated   │◄──►│  (Banks, Cards, │
+│                 │    │  Intermediary│    │   Wire Transfers)│
+└─────────────────┘    └─────────────┘    └─────────────────┘
+```
+
+### Data Flow
+1. **Client Registration**: User data stored in Vaelix Bank database
+2. **Weavr Synchronization**: Account/card data synchronized with Weavr
+3. **Sensitive Data Retrieval**: IBAN, CVC, card details retrieved from Weavr
+4. **Public Market Access**: Clients can use their banking details in the public market
+
 ## Features
 
 - User Authentication and Password Management
@@ -16,60 +34,140 @@ A banking API built on top of Weavr's Multi API, providing managed accounts and 
 - Bulk Operations
 - Production-ready with error handling and logging
 
-## IBAN Management
+## Sensitive Data Retrieval from Weavr
 
-Vaelix Bank supports Virtual IBAN (vIBAN) assignment to enable wire transfer capabilities for accounts.
+As a regulated intermediary, Weavr provides access to sensitive banking data (IBAN, CVC, card details) that clients can use in the public market.
 
-### Quick Start with IBANs
+### Data Retrieval Process
 
-1. **Create Account**: Create a user account in the database
-2. **Sync with Weavr**: Synchronize the account with Weavr's managed accounts
-3. **Assign IBAN**: Request IBAN assignment for the account
-4. **Use for Transactions**: The account can now receive and send wire transfers
+1. **Client Onboarding**: Client registers in Vaelix Bank system
+2. **Weavr Identity Creation**: Client identity created in Weavr
+3. **Account/Card Creation**: Managed accounts and cards created in Weavr
+4. **Sensitive Data Assignment**: IBAN/CVC assigned by Weavr
+5. **Data Retrieval**: Sensitive data retrieved and stored locally
+6. **Client Access**: Client can use banking details in public market
 
-### IBAN Assignment Example
+### IBAN Retrieval Example
 
 ```bash
-# 1. Create account
+# 1. Create local account
 curl -X POST http://localhost:3000/api/accounts/db \
   -H "Content-Type: application/json" \
   -H "x-api-key: your-server-key" \
   -d '{"user_id": 123, "account_type": "checking", "currency": "EUR"}'
 
-# 2. Sync with Weavr (creates managed account)
+# 2. Create Weavr managed account
 curl -X POST http://localhost:3000/api/accounts \
   -H "api_key: your-weavr-key" \
   -H "auth_token: your-auth-token" \
   -d '{"profile_id": "profile_123", "friendlyName": "Main Account"}'
 
-# 3. Assign IBAN
+# 3. Request IBAN assignment from Weavr
 curl -X POST http://localhost:3000/api/accounts/db/123/iban \
   -H "x-api-key: your-weavr-key" \
   -H "auth_token: your-auth-token"
 
-# 4. Get IBAN details
+# 4. Retrieve IBAN details from Weavr
 curl http://localhost:3000/api/accounts/db/123/iban \
   -H "x-api-key: your-weavr-key" \
   -H "auth_token: your-auth-token"
 ```
 
-**Response:**
+**Response with sensitive data:**
 ```json
 {
   "account_id": 123,
   "iban": "FR1234567890123456789012345",
   "bic": "BNPAFRPP",
-  "state": "ALLOCATED"
+  "state": "ALLOCATED",
+  "bank_details": {
+    "beneficiary_name": "John Doe",
+    "bank_name": "BNP Paribas",
+    "bank_address": "Paris, France"
+  }
 }
 ```
 
-### IBAN States
+### Card Data Retrieval (CVC, PAN, etc.)
 
-- `UNALLOCATED`: No IBAN assigned
-- `PENDING_ALLOCATION`: IBAN being assigned
-- `ALLOCATED`: IBAN ready for use
+```bash
+# Create managed card in Weavr
+curl -X POST http://localhost:3000/api/cards \
+  -H "api_key: your-weavr-key" \
+  -H "auth_token: your-auth-token" \
+  -d '{
+    "profile_id": "profile_123",
+    "name": "Main Card",
+    "type": "virtual"
+  }'
 
-For detailed documentation, see [API.md](docs/API.md#iban-management).
+# Retrieve card details including CVC
+curl http://localhost:3000/api/cards/card_123 \
+  -H "api_key: your-weavr-key" \
+  -H "auth_token: your-auth-token"
+```
+
+**Response with sensitive card data:**
+```json
+{
+  "id": "card_123",
+  "masked_pan": "411111******1111",
+  "cvc": "123",
+  "expiry_date": "12/26",
+  "cardholder_name": "John Doe",
+  "state": "ACTIVE"
+}
+```
+
+### Data Storage Strategy
+
+Sensitive data retrieved from Weavr is stored locally for client access:
+
+```sql
+-- IBAN data storage
+UPDATE accounts
+SET iban = 'FR1234567890123456789012345',
+    bic = 'BNPAFRPP',
+    weavr_id = 'weavr_account_123',
+    sync_status = 'synced',
+    last_weavr_sync = NOW()
+WHERE id = 123;
+
+-- Card data storage
+UPDATE vibans_cards
+SET cvc = '123',
+    masked_pan = '411111******1111',
+    expiry_date = '12/26',
+    weavr_id = 'weavr_card_456',
+    sync_status = 'synced'
+WHERE id = 456;
+```
+
+### Security Considerations
+
+- **Encryption**: Sensitive data encrypted at rest using AES-256
+- **Access Control**: API keys required for data retrieval
+- **Audit Logging**: All data access logged for compliance
+- **Token Rotation**: Weavr auth tokens rotated regularly
+- **PCI Compliance**: Card data handling follows PCI DSS standards
+
+### Webhook Integration
+
+Weavr automatically notifies of data changes:
+
+```json
+{
+  "type": "managed_account.iban.allocated",
+  "data": {
+    "id": "weavr_account_123",
+    "iban": "FR1234567890123456789012345",
+    "bic": "BNPAFRPP",
+    "state": "ALLOCATED"
+  }
+}
+```
+
+For detailed API documentation, see [API.md](docs/API.md#iban-management).
 
 ## Installation
 
@@ -284,4 +382,4 @@ This API is configured to run under `https://api.vaelixbank.com/`. Make sure to:
 
 ## License
 
-ISC
+The Vaelix Bank API use the Apache 2.0 Licence [licence](LICENSE)

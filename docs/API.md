@@ -62,14 +62,27 @@ This document describes the API endpoints available in the Vaelix Bank API. Endp
 
 ## IBAN Management
 
-Virtual IBANs (vIBAN) enable accounts to receive and send funds via wire transfers. The IBAN management system integrates with Weavr to provide banking capabilities.
+Virtual IBANs (vIBAN) enable accounts to receive and send funds via wire transfers. As a regulated intermediary, Weavr provides the banking infrastructure while Vaelix Bank manages client relationships and data access.
 
-### How IBANs Work
+### Architecture: Weavr as Regulated Intermediary
 
-1. **Account Creation**: When a user creates an account, it's initially stored in the local database
-2. **Weavr Synchronization**: The account is synchronized with Weavr to create a managed account
-3. **IBAN Assignment**: An IBAN is assigned to the managed account, enabling wire transfer capabilities
-4. **Database Association**: The IBAN details are stored locally and associated with the account
+```
+┌─────────────────┐    ┌─────────────┐    ┌─────────────────┐
+│  Vaelix Bank    │    │   Weavr      │    │  Public Market  │
+│  (Proprietary)  │◄──►│ (Regulated   │◄──►│  (Banks, Cards, │
+│  Client Mgmt    │    │  Banking)    │    │   Wire Xfers)   │
+└─────────────────┘    └─────────────┘    └─────────────────┘
+```
+
+### Sensitive Data Retrieval Process
+
+1. **Client Registration**: Client data stored in Vaelix Bank database
+2. **Weavr Identity**: Client identity created in Weavr's regulated environment
+3. **Managed Account**: Account created in Weavr with banking capabilities
+4. **IBAN Assignment**: Weavr assigns virtual IBAN for wire transfers
+5. **Data Retrieval**: Vaelix Bank retrieves IBAN details from Weavr
+6. **Local Storage**: Sensitive data stored securely in local database
+7. **Client Access**: Client can use IBAN in public market transactions
 
 ### IBAN Assignment Process
 
@@ -142,11 +155,62 @@ auth_token: <weavr_auth_token>
 - **`PENDING_ALLOCATION`**: IBAN assignment in progress
 - **`ALLOCATED`**: IBAN is active and ready for use
 
+### Card Data Retrieval (CVC, PAN, Expiry)
+
+Similar to IBANs, sensitive card data is retrieved from Weavr:
+
+#### Create Managed Card
+```http
+POST /api/cards
+Content-Type: application/json
+api_key: <weavr_api_key>
+auth_token: <weavr_auth_token>
+
+{
+  "profile_id": "profile_123",
+  "name": "Virtual Card",
+  "type": "virtual",
+  "brand": "visa",
+  "currency": "EUR"
+}
+```
+
+#### Retrieve Card Details
+```http
+GET /api/cards/{card_id}
+api_key: <weavr_api_key>
+auth_token: <weavr_auth_token>
+```
+
+**Response with sensitive data:**
+```json
+{
+  "id": "card_123",
+  "profile_id": "profile_123",
+  "name": "Virtual Card",
+  "state": "ACTIVE",
+  "type": "virtual",
+  "brand": "visa",
+  "currency": "EUR",
+  "masked_pan": "411111******1111",
+  "cvc": "123",
+  "expiry_date": "12/26",
+  "cardholder_name": "John Doe",
+  "balances": {
+    "available": 1000.00,
+    "blocked": 0.00,
+    "reserved": 50.00
+  }
+}
+```
+
 ### Using IBANs for Transactions
 
 Once an IBAN is allocated, the account can:
 
 #### Receive Funds (Incoming Wire Transfers)
+External parties can send funds to the client's IBAN:
+
 ```http
 POST /api/transactions/wire
 Content-Type: application/json
@@ -169,6 +233,8 @@ auth_token: <weavr_auth_token>
 ```
 
 #### Send Funds (Outgoing Wire Transfers)
+Client can send funds from their IBAN to external accounts:
+
 ```http
 POST /api/transactions/wire
 Content-Type: application/json
@@ -211,17 +277,90 @@ Common IBAN-related errors:
 - **`INVALID_CREDENTIALS`**: Weavr API credentials are invalid
 - **`INSUFFICIENT_PERMISSIONS`**: API key lacks IBAN management permissions
 
+### Security & Compliance
+
+As Weavr acts as the regulated intermediary, Vaelix Bank must ensure:
+
+#### Data Protection
+- **Encryption**: Sensitive data (IBAN, CVC) encrypted at rest and in transit
+- **Access Control**: API key authentication required for all operations
+- **Audit Logging**: All data access and modifications logged
+- **Token Management**: Weavr auth tokens rotated regularly
+
+#### Regulatory Compliance
+- **PSD2 Compliance**: Strong Customer Authentication (SCA) implemented
+- **PCI DSS**: Card data handling follows PCI DSS standards
+- **GDPR**: Client data protection and consent management
+- **AML/KYC**: Client verification through Weavr's regulated processes
+
+#### Data Storage Strategy
+```sql
+-- Sensitive data encrypted storage
+CREATE TABLE encrypted_client_data (
+  id SERIAL PRIMARY KEY,
+  client_id INTEGER REFERENCES clients(id),
+  data_type VARCHAR(50), -- 'iban', 'cvc', 'pan'
+  encrypted_value TEXT, -- AES-256 encrypted
+  weavr_reference VARCHAR(255),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Access logging for compliance
+CREATE TABLE data_access_log (
+  id SERIAL PRIMARY KEY,
+  client_id INTEGER,
+  data_type VARCHAR(50),
+  action VARCHAR(50), -- 'retrieve', 'update', 'delete'
+  api_key_hash VARCHAR(255),
+  ip_address INET,
+  user_agent TEXT,
+  timestamp TIMESTAMP DEFAULT NOW()
+);
+```
+
 ### Webhook Integration
 
-IBAN status changes are automatically updated via Weavr webhooks:
+Weavr automatically notifies of data changes and events:
 
+#### IBAN Allocation Webhook
 ```json
 {
   "type": "managed_account.iban.allocated",
   "data": {
     "id": "weavr_account_456",
     "iban": "FR1234567890123456789012345",
-    "bic": "BNPAFRPP"
+    "bic": "BNPAFRPP",
+    "state": "ALLOCATED"
+  }
+}
+```
+
+#### Card Data Webhook
+```json
+{
+  "type": "managed_card.created",
+  "data": {
+    "id": "weavr_card_789",
+    "masked_pan": "411111******1111",
+    "cvc": "123",
+    "expiry_date": "12/26",
+    "state": "ACTIVE"
+  }
+}
+```
+
+#### Transaction Webhook
+```json
+{
+  "type": "transfer.state.changed",
+  "data": {
+    "id": "transfer_123",
+    "state": "COMPLETED",
+    "amount": 100.00,
+    "currency": "EUR",
+    "source_iban": "FR1234567890123456789012345",
+    "destination_iban": "GB29NWBK60161331926819"
   }
 }
 ```
