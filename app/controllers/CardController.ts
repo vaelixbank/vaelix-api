@@ -4,6 +4,9 @@ import { ApiResponseHandler } from '../utils/response';
 import { logger } from '../utils/logger';
 import { parseWeavrError, getWeavrErrorStatus } from '../utils/weavr';
 import { CreateManagedCardRequest, UpdateManagedCardRequest, CreateSpendRulesRequest } from '../models/Card';
+import { CardQueries } from '../queries/cardQueries';
+import { AuthQueries } from '../queries/authQueries';
+import { UserQueries } from '../queries/userQueries';
 
 export class CardController {
   constructor(private weavrService: WeavrService) {}
@@ -57,6 +60,18 @@ export class CardController {
       );
 
       logger.weavrResponse('POST', '/multi/managed_cards', 201, req.headers['x-request-id'] as string);
+
+      // Log card creation in local database
+      try {
+        // TODO: Extract user ID from auth token or request context
+        const userId = 1; // Placeholder - implement proper user extraction from JWT/auth
+        if (result.id) {
+          await CardQueries.createVibanCard(userId, result.id, result.card_number || '', 'EUR', 'active');
+          await AuthQueries.createAuditLog(userId, 'CARD_CREATED', 'card', result.id);
+        }
+      } catch (dbError) {
+        logger.error('Failed to log card creation in database', { error: dbError }, req.headers['x-request-id'] as string);
+      }
 
       return ApiResponseHandler.created(res, result);
     } catch (error: any) {

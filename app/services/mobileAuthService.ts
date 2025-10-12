@@ -1,7 +1,8 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
-import pool from '../utils/database';
+import { UserQueries } from '../queries/userQueries';
+import { AuthQueries } from '../queries/authQueries';
 import { MobileUser, AuthTokens, Session, MobileLoginRequest, MobileRegisterRequest } from '../models/Auth';
 
 export class MobileAuthService {
@@ -67,16 +68,23 @@ export class MobileAuthService {
       }
 
       // Get user from database
-      const result = await pool.query(
-        'SELECT id, email, phone, full_name, device_id, is_verified, kyc_status, created_at, last_login FROM users WHERE id = $1',
-        [decoded.userId]
-      );
+      const user = await UserQueries.getUserById(decoded.userId);
 
-      if (result.rows.length === 0) {
+      if (!user) {
         return null;
       }
 
-      return result.rows[0] as MobileUser;
+      return {
+        id: user.id,
+        email: user.email,
+        phone: user.phone,
+        full_name: user.full_name,
+        device_id: user.device_id,
+        is_verified: user.is_verified,
+        kyc_status: user.kyc_status,
+        created_at: user.created_at,
+        last_login: user.last_login
+      } as MobileUser;
     } catch (error) {
       return null;
     }

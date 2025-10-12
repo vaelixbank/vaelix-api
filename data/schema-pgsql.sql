@@ -1,5 +1,5 @@
 -- =========================================
--- PostgreSQl Schema VBG Ledger - 39 tables
+-- PostgreSQl Schema VBG Ledger - 49 tables
 -- =========================================
 
 -- 1. Users
@@ -370,4 +370,119 @@ CREATE TABLE aml_flags (
     transaction_id INT REFERENCES transactions(id),
     reason VARCHAR(255),
     flagged_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 40. Beneficiaries
+CREATE TABLE beneficiaries (
+    id VARCHAR(100) PRIMARY KEY,
+    profile_id VARCHAR(100),
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(20) CHECK (type IN ('individual', 'corporate')),
+    state VARCHAR(20) DEFAULT 'active' CHECK (state IN ('active', 'inactive')),
+    details JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 41. Beneficiary Batches
+CREATE TABLE beneficiary_batches (
+    id VARCHAR(100) PRIMARY KEY,
+    profile_id VARCHAR(100),
+    state VARCHAR(20) DEFAULT 'pending' CHECK (state IN ('pending', 'approved', 'rejected')),
+    beneficiaries JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 42. Bulk Processes
+CREATE TABLE bulk_processes (
+    id VARCHAR(100) PRIMARY KEY,
+    type VARCHAR(50),
+    state VARCHAR(20) DEFAULT 'pending' CHECK (state IN ('pending', 'running', 'paused', 'completed', 'failed', 'cancelled')),
+    progress JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    paused_at TIMESTAMP,
+    cancelled_at TIMESTAMP
+);
+
+-- 43. Bulk Operations
+CREATE TABLE bulk_operations (
+    id VARCHAR(100) PRIMARY KEY,
+    bulk_id VARCHAR(100) REFERENCES bulk_processes(id),
+    type VARCHAR(50),
+    state VARCHAR(20) DEFAULT 'pending' CHECK (state IN ('pending', 'running', 'completed', 'failed')),
+    data JSONB,
+    result JSONB,
+    error TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    completed_at TIMESTAMP
+);
+
+-- 44. Consumers
+CREATE TABLE consumers (
+    id VARCHAR(100) PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    type VARCHAR(20) DEFAULT 'consumer',
+    state VARCHAR(50),
+    root_user JSONB,
+    kyc JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 45. Corporates
+CREATE TABLE corporates (
+    id VARCHAR(100) PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    type VARCHAR(20) DEFAULT 'corporate',
+    state VARCHAR(50),
+    root_user JSONB,
+    kyb JSONB,
+    company JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 46. Linked Accounts
+CREATE TABLE linked_accounts (
+    id VARCHAR(100) PRIMARY KEY,
+    profile_id VARCHAR(100),
+    name VARCHAR(255),
+    state VARCHAR(20) DEFAULT 'active' CHECK (state IN ('active', 'blocked', 'closed')),
+    type VARCHAR(20) CHECK (type IN ('checking', 'savings', 'business')),
+    currency CHAR(3),
+    balance JSONB,
+    bank_details JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 47. Account Identifiers
+CREATE TABLE account_identifiers (
+    id SERIAL PRIMARY KEY,
+    linked_account_id VARCHAR(100) REFERENCES linked_accounts(id),
+    type VARCHAR(20) CHECK (type IN ('iban', 'bban', 'account_number', 'sort_code')),
+    identification VARCHAR(100)
+);
+
+-- 48. Auth Factors
+CREATE TABLE auth_factors (
+    id VARCHAR(100) PRIMARY KEY,
+    type VARCHAR(20) CHECK (type IN ('otp', 'push')),
+    state VARCHAR(20) DEFAULT 'active' CHECK (state IN ('active', 'inactive')),
+    created_at TIMESTAMP DEFAULT NOW(),
+    last_used_at TIMESTAMP
+);
+
+-- 49. SCA Challenges
+CREATE TABLE sca_challenges (
+    id VARCHAR(100) PRIMARY KEY,
+    type VARCHAR(20) CHECK (type IN ('step_up', 'confirmation')),
+    method VARCHAR(20) CHECK (method IN ('otp', 'push')),
+    state VARCHAR(20) DEFAULT 'pending' CHECK (state IN ('pending', 'completed', 'expired', 'failed')),
+    expires_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    completed_at TIMESTAMP
 );

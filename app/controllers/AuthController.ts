@@ -4,6 +4,8 @@ import { ApiResponseHandler } from '../utils/response';
 import { logger } from '../utils/logger';
 import { parseWeavrError, getWeavrErrorStatus } from '../utils/weavr';
 import { LoginRequest, BiometricLoginRequest } from '../models/Auth';
+import { UserQueries } from '../queries/userQueries';
+import { AuthQueries } from '../queries/authQueries';
 
 export class AuthController {
   constructor(private weavrService: WeavrService) {}
@@ -12,6 +14,7 @@ export class AuthController {
     try {
       const { identifier, password }: LoginRequest = req.body;
       const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
 
       logger.weavrRequest('POST', '/multi/access/login', req.headers['x-request-id'] as string);
 
@@ -24,9 +27,27 @@ export class AuthController {
 
       logger.weavrResponse('POST', '/multi/access/login', 200, req.headers['x-request-id'] as string);
 
+      // Log successful login attempt
+      const user = await UserQueries.getUserByEmail(identifier);
+      if (user) {
+        await UserQueries.createLoginAttempt(user.id, clientIP, true);
+        await AuthQueries.createAuditLog(user.id, 'LOGIN_SUCCESS', 'auth', user.id);
+      }
+
       return ApiResponseHandler.success(res, result);
     } catch (error: any) {
       logger.weavrError('POST', '/multi/access/login', error, req.headers['x-request-id'] as string);
+
+      // Log failed login attempt
+      try {
+        const user = await UserQueries.getUserByEmail(req.body.identifier);
+        if (user) {
+          await UserQueries.createLoginAttempt(user.id, req.ip || 'unknown', false);
+          await AuthQueries.createAuditLog(user.id, 'LOGIN_FAILED', 'auth', user.id);
+        }
+      } catch (logError) {
+        logger.error('Failed to log login attempt', { error: logError }, req.headers['x-request-id'] as string);
+      }
 
       const weavrError = parseWeavrError(error);
       return ApiResponseHandler.error(

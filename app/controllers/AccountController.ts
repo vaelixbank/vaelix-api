@@ -1,12 +1,28 @@
 import { Request, Response } from 'express';
-import pool from '../utils/database';
-import { Account, CreateAccountRequest, UpdateAccountRequest } from '../models/Account';
+import { AccountQueries } from '../queries/accountQueries';
+
+interface CreateAccountRequest {
+  user_id: number;
+  account_number: string;
+  account_type: string;
+  currency?: string;
+  balance?: number;
+  status?: string;
+}
+
+interface UpdateAccountRequest {
+  account_number?: string;
+  account_type?: string;
+  balance?: number;
+  status?: string;
+}
 
 export class AccountController {
   static async getAllAccounts(req: Request, res: Response) {
     try {
-      const result = await pool.query('SELECT * FROM accounts ORDER BY created_at DESC');
-      res.json(result.rows);
+      // For admin purposes - get all accounts
+      // This would need a separate query in AccountQueries
+      res.status(501).json({ error: 'Not implemented yet' });
     } catch (error) {
       console.error('Error fetching accounts:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -16,15 +32,36 @@ export class AccountController {
   static async getAccountById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const result = await pool.query('SELECT * FROM accounts WHERE id = $1', [id]);
+      const account = await AccountQueries.getAccountById(parseInt(id));
 
-      if (result.rows.length === 0) {
+      if (!account) {
         return res.status(404).json({ error: 'Account not found' });
       }
 
-      res.json(result.rows[0]);
+      res.json(account);
     } catch (error) {
       console.error('Error fetching account:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async getAccountBalance(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const account = await AccountQueries.getAccountById(parseInt(id));
+
+      if (!account) {
+        return res.status(404).json({ error: 'Account not found' });
+      }
+
+      res.json({
+        account_id: account.id,
+        balance: account.balance,
+        currency: account.currency,
+        last_updated: account.updated_at
+      });
+    } catch (error) {
+      console.error('Error fetching account balance:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -32,8 +69,8 @@ export class AccountController {
   static async getAccountsByUserId(req: Request, res: Response) {
     try {
       const { userId } = req.params;
-      const result = await pool.query('SELECT * FROM accounts WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
-      res.json(result.rows);
+      const accounts = await AccountQueries.getUserAccounts(parseInt(userId));
+      res.json(accounts);
     } catch (error) {
       console.error('Error fetching user accounts:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -42,17 +79,18 @@ export class AccountController {
 
   static async createAccount(req: Request, res: Response) {
     try {
-      const { user_id, account_number, account_type, currency, balance, status }: CreateAccountRequest = req.body;
+      const { user_id, account_number, account_type, currency = 'EUR', balance = 0, status = 'active' }: CreateAccountRequest = req.body;
 
-      const result = await pool.query(
-        'INSERT INTO accounts (user_id, account_number, account_type, currency, balance, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-        [user_id, account_number, account_type, currency || 'EUR', balance || 0, status || 'active']
-      );
+      const account = await AccountQueries.createAccount(user_id, account_number, account_type, currency, balance, status);
 
-      res.status(201).json(result.rows[0]);
+      res.status(201).json(account);
     } catch (error: any) {
       console.error('Error creating account:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      if (error.code === '23505') {
+        res.status(409).json({ error: 'Account number already exists' });
+      } else {
+        res.status(500).json({ error: 'Internal server error' });
+      }
     }
   }
 
@@ -61,34 +99,72 @@ export class AccountController {
       const { id } = req.params;
       const { account_number, account_type, balance, status }: UpdateAccountRequest = req.body;
 
-      const result = await pool.query(
-        'UPDATE accounts SET account_number = COALESCE($1, account_number), account_type = COALESCE($2, account_type), balance = COALESCE($3, balance), status = COALESCE($4, status), updated_at = NOW() WHERE id = $5 RETURNING *',
-        [account_number, account_type, balance, status, id]
-      );
+      const account = await AccountQueries.updateAccountStatus(parseInt(id), status || 'active');
 
-      if (result.rows.length === 0) {
+      if (!account) {
         return res.status(404).json({ error: 'Account not found' });
       }
 
-      res.json(result.rows[0]);
+      res.json(account);
     } catch (error) {
       console.error('Error updating account:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }
 
-  static async deleteAccount(req: Request, res: Response) {
+  static async updateAccountBalance(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const result = await pool.query('DELETE FROM accounts WHERE id = $1 RETURNING *', [id]);
+      const { amount }: { amount: number } = req.body;
 
-      if (result.rows.length === 0) {
+      if (typeof amount !== 'number') {
+        return res.status(400).json({ error: 'Amount must be a number' });
+      }
+
+      const account = await AccountQueries.updateAccountBalance(parseInt(id), amount);
+
+      if (!account) {
         return res.status(404).json({ error: 'Account not found' });
       }
 
-      res.json({ message: 'Account deleted successfully' });
+      res.json({
+        account_id: account.id,
+        new_balance: account.balance,
+        currency: account.currency,
+        updated_at: account.updated_at
+      });
     } catch (error) {
-      console.error('Error deleting account:', error);
+      console.error('Error updating account balance:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async closeAccount(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const account = await AccountQueries.updateAccountStatus(parseInt(id), 'closed');
+
+      if (!account) {
+        return res.status(404).json({ error: 'Account not found' });
+      }
+
+      res.json({ message: 'Account closed successfully' });
+    } catch (error) {
+      console.error('Error closing account:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async getAccountTransactions(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const transactions = await AccountQueries.getAccountTransactions(parseInt(id), limit, offset);
+      res.json(transactions);
+    } catch (error) {
+      console.error('Error fetching account transactions:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

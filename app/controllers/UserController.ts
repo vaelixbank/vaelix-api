@@ -1,12 +1,24 @@
 import { Request, Response } from 'express';
-import pool from '../utils/database';
-import { User, CreateUserRequest, UpdateUserRequest } from '../models/User';
+import { UserQueries } from '../queries/userQueries';
+
+interface CreateUserRequest {
+  email: string;
+  full_name: string;
+  phone?: string;
+  kyc_status?: string;
+}
+
+interface UpdateUserRequest {
+  full_name?: string;
+  phone?: string;
+  kyc_status?: string;
+}
 
 export class UserController {
   static async getAllUsers(req: Request, res: Response) {
     try {
-      const result = await pool.query('SELECT * FROM users ORDER BY created_at DESC');
-      res.json(result.rows);
+      const users = await UserQueries.getAllUsers();
+      res.json(users);
     } catch (error) {
       console.error('Error fetching users:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -16,13 +28,13 @@ export class UserController {
   static async getUserById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+      const user = await UserQueries.getUserById(parseInt(id));
 
-      if (result.rows.length === 0) {
+      if (!user) {
         return res.status(404).json({ error: 'User not found' });
       }
 
-      res.json(result.rows[0]);
+      res.json(user);
     } catch (error) {
       console.error('Error fetching user:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -33,12 +45,9 @@ export class UserController {
     try {
       const { email, full_name, phone, kyc_status }: CreateUserRequest = req.body;
 
-      const result = await pool.query(
-        'INSERT INTO users (email, full_name, phone, kyc_status) VALUES ($1, $2, $3, $4) RETURNING *',
-        [email, full_name, phone, kyc_status]
-      );
+      const user = await UserQueries.createUser(email, full_name, phone, kyc_status);
 
-      res.status(201).json(result.rows[0]);
+      res.status(201).json(user);
     } catch (error: any) {
       console.error('Error creating user:', error);
       if (error.code === '23505') { // Unique violation
@@ -52,18 +61,15 @@ export class UserController {
   static async updateUser(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { email, full_name, phone, kyc_status }: UpdateUserRequest = req.body;
+      const { full_name, phone, kyc_status }: UpdateUserRequest = req.body;
 
-      const result = await pool.query(
-        'UPDATE users SET email = COALESCE($1, email), full_name = COALESCE($2, full_name), phone = COALESCE($3, phone), kyc_status = COALESCE($4, kyc_status), updated_at = NOW() WHERE id = $5 RETURNING *',
-        [email, full_name, phone, kyc_status, id]
-      );
+      const user = await UserQueries.updateUser(parseInt(id), full_name, phone, kyc_status);
 
-      if (result.rows.length === 0) {
+      if (!user) {
         return res.status(404).json({ error: 'User not found' });
       }
 
-      res.json(result.rows[0]);
+      res.json(user);
     } catch (error: any) {
       console.error('Error updating user:', error);
       if (error.code === '23505') {
@@ -77,9 +83,9 @@ export class UserController {
   static async deleteUser(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING *', [id]);
+      const user = await UserQueries.deleteUser(parseInt(id));
 
-      if (result.rows.length === 0) {
+      if (!user) {
         return res.status(404).json({ error: 'User not found' });
       }
 

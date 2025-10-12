@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import pool from '../utils/database';
+import { AuthQueries } from '../queries/authQueries';
 import { ApiKeyType } from '../models/ApiKey';
 
 export interface AuthenticatedRequest extends Request {
@@ -23,19 +23,21 @@ export const authenticateApiKey = async (req: AuthenticatedRequest, res: Respons
       });
     }
 
-    const result = await pool.query(
-      'SELECT id, user_id, type, expires_at FROM api_keys WHERE key = $1 AND secret = $2 AND (expires_at IS NULL OR expires_at > NOW())',
-      [apiKey, apiSecret]
-    );
+    const apiKeyData = await AuthQueries.getApiKey(apiKey, apiSecret);
 
-    if (result.rows.length === 0) {
+    if (!apiKeyData) {
       return res.status(401).json({
         error: 'Invalid or expired API credentials',
         code: 'INVALID_API_CREDENTIALS'
       });
     }
 
-    req.apiKey = result.rows[0];
+    req.apiKey = {
+      id: apiKeyData.id,
+      user_id: apiKeyData.user_id,
+      type: apiKeyData.type as ApiKeyType,
+      expires_at: apiKeyData.expires_at
+    };
     next();
   } catch (error) {
     console.error('Error authenticating API key:', error);
