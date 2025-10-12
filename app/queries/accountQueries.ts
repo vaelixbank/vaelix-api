@@ -229,4 +229,176 @@ export class AccountQueries {
     );
     return result.rows[0];
   }
+
+  // =========================================
+  // WEAVR SYNCHRONIZATION METHODS
+  // =========================================
+
+  // Update account with Weavr data
+  static async updateAccountWithWeavrData(id: number, weavrData: {
+    weavr_id?: string;
+    iban?: string;
+    bic?: string;
+    available_balance?: number;
+    blocked_balance?: number;
+    reserved_balance?: number;
+    last_weavr_sync?: Date;
+    sync_status?: string;
+  }) {
+    const result = await pool.query(
+      `UPDATE accounts SET
+        weavr_id = $2,
+        iban = $3,
+        bic = $4,
+        available_balance = $5,
+        blocked_balance = $6,
+        reserved_balance = $7,
+        last_weavr_sync = $8,
+        sync_status = $9,
+        updated_at = NOW()
+       WHERE id = $1 RETURNING *`,
+      [
+        id,
+        weavrData.weavr_id || null,
+        weavrData.iban || null,
+        weavrData.bic || null,
+        weavrData.available_balance || 0,
+        weavrData.blocked_balance || 0,
+        weavrData.reserved_balance || 0,
+        weavrData.last_weavr_sync || new Date(),
+        weavrData.sync_status || 'synced'
+      ]
+    );
+    return result.rows[0];
+  }
+
+  // Update account sync status
+  static async updateAccountSyncStatus(id: number, sync_status: string, error_message?: string) {
+    const result = await pool.query(
+      'UPDATE accounts SET sync_status = $2, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id, sync_status]
+    );
+    return result.rows[0];
+  }
+
+  // Update account balance from Weavr
+  static async updateAccountBalanceFromWeavr(id: number, balanceData: {
+    balance?: number;
+    available_balance?: number;
+    blocked_balance?: number;
+    reserved_balance?: number;
+    last_weavr_sync?: Date;
+    sync_status?: string;
+  }) {
+    const result = await pool.query(
+      `UPDATE accounts SET
+        balance = $2,
+        available_balance = $3,
+        blocked_balance = $4,
+        reserved_balance = $5,
+        last_weavr_sync = $6,
+        sync_status = $7,
+        updated_at = NOW()
+       WHERE id = $1 RETURNING *`,
+      [
+        id,
+        balanceData.balance || 0,
+        balanceData.available_balance || 0,
+        balanceData.blocked_balance || 0,
+        balanceData.reserved_balance || 0,
+        balanceData.last_weavr_sync || new Date(),
+        balanceData.sync_status || 'synced'
+      ]
+    );
+    return result.rows[0];
+  }
+
+  // Get account by Weavr ID
+  static async getAccountByWeavrId(weavr_id: string) {
+    const result = await pool.query('SELECT * FROM accounts WHERE weavr_id = $1', [weavr_id]);
+    return result.rows[0];
+  }
+
+  // Record balance change in history
+  static async recordBalanceChange(account_id: number, changeData: {
+    change_type: string;
+    previous_balance?: number;
+    new_balance?: number;
+    available_previous?: number;
+    available_new?: number;
+    blocked_previous?: number;
+    blocked_new?: number;
+    change_amount?: number;
+    transaction_id?: number;
+    weavr_transaction_id?: string;
+    description?: string;
+  }) {
+    const result = await pool.query(
+      `INSERT INTO balance_history (
+        account_id, previous_balance, new_balance, available_previous, available_new,
+        blocked_previous, blocked_new, change_amount, change_type, transaction_id,
+        weavr_transaction_id, description, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())`,
+      [
+        account_id,
+        changeData.previous_balance,
+        changeData.new_balance,
+        changeData.available_previous,
+        changeData.available_new,
+        changeData.blocked_previous,
+        changeData.blocked_new,
+        changeData.change_amount,
+        changeData.change_type,
+        changeData.transaction_id,
+        changeData.weavr_transaction_id,
+        changeData.description
+      ]
+    );
+    return result.rows[0];
+  }
+
+  // Update transaction with Weavr ID
+  static async updateTransactionWeavrId(transaction_id: number, weavr_transaction_id: string) {
+    const result = await pool.query(
+      'UPDATE transactions SET weavr_transaction_id = $2, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [transaction_id, weavr_transaction_id]
+    );
+    return result.rows[0];
+  }
+
+  // Get transaction by Weavr ID
+  static async getTransactionByWeavrId(weavr_transaction_id: string) {
+    const result = await pool.query('SELECT * FROM transactions WHERE weavr_transaction_id = $1', [weavr_transaction_id]);
+    return result.rows[0];
+  }
+
+  // Get pending sync accounts
+  static async getPendingSyncAccounts() {
+    const result = await pool.query(
+      "SELECT * FROM accounts WHERE sync_status IN ('pending', 'failed') ORDER BY created_at ASC"
+    );
+    return result.rows;
+  }
+
+  // Get account with full balance details
+  static async getAccountWithBalanceDetails(id: number) {
+    const result = await pool.query(
+      `SELECT a.*,
+              COALESCE(a.available_balance, 0) as available_balance,
+              COALESCE(a.blocked_balance, 0) as blocked_balance,
+              COALESCE(a.reserved_balance, 0) as reserved_balance
+       FROM accounts a WHERE a.id = $1`,
+      [id]
+    );
+    return result.rows[0];
+  }
+
+  // Get all accounts (for admin/health checks)
+  static async getAllAccounts(limit: number = 100) {
+    const result = await pool.query(
+      'SELECT * FROM accounts ORDER BY created_at DESC LIMIT $1',
+      [limit]
+    );
+    return result.rows;
+  }
 }

@@ -107,82 +107,43 @@ export class MobileAuthService {
 
   // Create session
   async createSession(userId: number, deviceId: string, tokens: AuthTokens): Promise<Session> {
-    const sessionId = crypto.randomUUID();
-    const now = new Date();
-    const accessExpiry = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutes
-    const refreshExpiry = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
-    const result = await pool.query(
-      `INSERT INTO sessions (id, user_id, device_id, access_token, refresh_token, expires_at, refresh_expires_at, is_active, created_at, last_activity)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING *`,
-      [sessionId, userId, deviceId, tokens.access_token, tokens.refresh_token, accessExpiry, refreshExpiry, true, now, now]
-    );
-
-    return result.rows[0] as Session;
+    return await AuthQueries.createMobileSession(userId, deviceId, tokens.access_token, tokens.refresh_token);
   }
 
   // Get active session
   async getActiveSession(sessionId: string): Promise<Session | null> {
-    const result = await pool.query(
-      'SELECT * FROM sessions WHERE id = $1 AND is_active = true AND refresh_expires_at > NOW()',
-      [sessionId]
-    );
-
-    return result.rows.length > 0 ? result.rows[0] as Session : null;
+    return await AuthQueries.getActiveSessionById(sessionId);
   }
 
   // Update session activity
   async updateSessionActivity(sessionId: string): Promise<void> {
-    await pool.query(
-      'UPDATE sessions SET last_activity = NOW() WHERE id = $1',
-      [sessionId]
-    );
+    await AuthQueries.updateSessionActivity(sessionId);
   }
 
   // Invalidate session
   async invalidateSession(sessionId: string): Promise<void> {
-    await pool.query(
-      'UPDATE sessions SET is_active = false WHERE id = $1',
-      [sessionId]
-    );
+    await AuthQueries.invalidateSession(sessionId);
   }
 
   // Invalidate all user sessions
   async invalidateAllUserSessions(userId: number): Promise<void> {
-    await pool.query(
-      'UPDATE sessions SET is_active = false WHERE user_id = $1',
-      [userId]
-    );
+    await AuthQueries.invalidateAllUserSessions(userId);
   }
 
   // Register new user
   async register(data: MobileRegisterRequest): Promise<MobileUser> {
     const hashedPassword = await this.hashPassword(data.password);
-
-    const result = await pool.query(
-      `INSERT INTO users (email, phone, full_name, password_hash, device_id, is_verified, kyc_status, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, email, phone, full_name, device_id, is_verified, kyc_status, created_at`,
-      [data.email, data.phone, data.full_name, hashedPassword, data.device_id, false, 'pending', new Date()]
-    );
-
-    return result.rows[0] as MobileUser;
+    return await UserQueries.createUserWithPassword(data.email, data.full_name, data.phone, hashedPassword, data.device_id);
   }
 
   // Login user
   async login(data: MobileLoginRequest): Promise<{ user: MobileUser; tokens: AuthTokens; session: Session } | null> {
     // Find user by email
-    const userResult = await pool.query(
-      'SELECT * FROM users WHERE email = $1',
-      [data.email]
-    );
+    const user = await UserQueries.getUserByEmailWithPassword(data.email);
 
-    if (userResult.rows.length === 0) {
+    if (!user) {
       return null;
     }
-
-    const user = userResult.rows[0];
 
     // Verify password if provided
     if (data.password) {
@@ -192,11 +153,8 @@ export class MobileAuthService {
       }
     }
 
-    // Update last login
-    await pool.query(
-      'UPDATE users SET last_login = NOW(), device_id = $1 WHERE id = $2',
-      [data.device_id, user.id]
-    );
+    // Update last login and device
+    await UserQueries.updateUserDeviceAndLogin(user.id, data.device_id);
 
     // Create user object without password
     const mobileUser: MobileUser = {
@@ -228,19 +186,26 @@ export class MobileAuthService {
     }
 
     // Get user
-    const userResult = await pool.query(
-      'SELECT id, email, phone, full_name, device_id, is_verified, kyc_status, created_at, last_login FROM users WHERE id = $1',
-      [userId]
-    );
+    const user = await UserQueries.getUserById(userId);
 
-    if (userResult.rows.length === 0) {
+    if (!user) {
       return null;
     }
 
-    const user = userResult.rows[0] as MobileUser;
+    const mobileUser: MobileUser = {
+      id: user.id,
+      email: user.email,
+      phone: user.phone,
+      full_name: user.full_name,
+      device_id: user.device_id,
+      is_verified: user.is_verified,
+      kyc_status: user.kyc_status,
+      created_at: user.created_at,
+      last_login: user.last_login
+    };
 
     // Generate new tokens
-    return this.generateTokens(user);
+    return this.generateTokens(mobileUser);
   }
 
   // Send verification code
@@ -248,16 +213,8 @@ export class MobileAuthService {
     // Generate 6-digit code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Store verification code (you might want to use Redis for this)
-    await pool.query(
-      `INSERT INTO verification_codes (user_id, code, type, expires_at, created_at)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (user_id, type) DO UPDATE SET
-       code = EXCLUDED.code,
-       expires_at = EXCLUDED.expires_at,
-       created_at = EXCLUDED.created_at`,
-      [userId, code, type, new Date(Date.now() + 10 * 60 * 1000), new Date()] // 10 minutes expiry
-    );
+    // Store verification code
+    await AuthQueries.createVerificationCode(userId, code, type);
 
     // Here you would integrate with SMS/email service
     // For now, just return the code (in production, send via service)
@@ -268,23 +225,14 @@ export class MobileAuthService {
 
   // Verify code
   async verifyCode(userId: number, code: string, type: 'email' | 'sms'): Promise<boolean> {
-    const result = await pool.query(
-      'SELECT * FROM verification_codes WHERE user_id = $1 AND code = $2 AND type = $3 AND expires_at > NOW()',
-      [userId, code, type]
-    );
+    const verificationCode = await AuthQueries.getVerificationCode(userId, code, type);
 
-    if (result.rows.length > 0) {
+    if (verificationCode) {
       // Mark user as verified
-      await pool.query(
-        'UPDATE users SET is_verified = true WHERE id = $1',
-        [userId]
-      );
+      await UserQueries.markUserAsVerified(userId);
 
       // Clean up verification code
-      await pool.query(
-        'DELETE FROM verification_codes WHERE user_id = $1 AND type = $2',
-        [userId, type]
-      );
+      await AuthQueries.deleteVerificationCode(userId, type);
 
       return true;
     }
@@ -294,53 +242,37 @@ export class MobileAuthService {
 
   // Check if user exists
   async checkUserExists(email: string): Promise<boolean> {
-    const result = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    return result.rows.length > 0;
+    const user = await UserQueries.getUserByEmail(email);
+    return !!user;
   }
 
   // Generate password reset token
   async generatePasswordResetToken(email: string): Promise<string> {
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-    await pool.query(
-      `INSERT INTO password_reset_tokens (email, token, expires_at, created_at)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (email) DO UPDATE SET
-       token = EXCLUDED.token,
-       expires_at = EXCLUDED.expires_at,
-       created_at = EXCLUDED.created_at`,
-      [email, token, expiresAt, new Date()]
-    );
-
+    await AuthQueries.createPasswordResetToken(email, token);
     return token;
   }
 
   // Reset password
   async resetPassword(token: string, newPassword: string): Promise<boolean> {
-    const result = await pool.query(
-      'SELECT email FROM password_reset_tokens WHERE token = $1 AND expires_at > NOW()',
-      [token]
-    );
+    const resetToken = await AuthQueries.getPasswordResetToken(token);
 
-    if (result.rows.length === 0) {
+    if (!resetToken) {
       return false;
     }
 
-    const email = result.rows[0].email;
     const hashedPassword = await this.hashPassword(newPassword);
 
-    // Update password
-    await pool.query(
-      'UPDATE users SET password_hash = $1 WHERE email = $2',
-      [hashedPassword, email]
-    );
+    // Update password - need to get user by email first
+    const user = await UserQueries.getUserByEmail(resetToken.email);
+    if (!user) {
+      return false;
+    }
+
+    await UserQueries.updateUserPassword(user.id, hashedPassword);
 
     // Clean up token
-    await pool.query(
-      'DELETE FROM password_reset_tokens WHERE token = $1',
-      [token]
-    );
+    await AuthQueries.deletePasswordResetToken(token);
 
     return true;
   }

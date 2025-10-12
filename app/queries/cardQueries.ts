@@ -217,4 +217,44 @@ export class CardQueries {
     );
     return result.rows;
   }
+
+  // =========================================
+  // WEAVR SYNCHRONIZATION METHODS
+  // =========================================
+
+  // Get card by Weavr ID
+  static async getCardByWeavrId(weavr_id: string) {
+    const result = await pool.query('SELECT * FROM vibans_cards WHERE weavr_id = $1', [weavr_id]);
+    return result.rows[0];
+  }
+
+  // Update card with Weavr data
+  static async updateCardWithWeavrData(id: number, weavrData: {
+    weavr_id?: string;
+    last_weavr_sync?: Date;
+    sync_status?: string;
+  }) {
+    const result = await pool.query(
+      `UPDATE vibans_cards SET
+        weavr_id = $2,
+        last_weavr_sync = $3,
+        sync_status = $4
+       WHERE id = $1 RETURNING *`,
+      [
+        id,
+        weavrData.weavr_id || null,
+        weavrData.last_weavr_sync || new Date(),
+        weavrData.sync_status || 'synced'
+      ]
+    );
+    return result.rows[0];
+  }
+
+  // Get pending sync cards
+  static async getPendingSyncCards() {
+    const result = await pool.query(
+      "SELECT * FROM vibans_cards WHERE sync_status IN ('pending', 'failed') ORDER BY created_at ASC"
+    );
+    return result.rows;
+  }
 }

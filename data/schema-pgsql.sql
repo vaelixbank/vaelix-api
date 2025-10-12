@@ -1,5 +1,5 @@
 -- =========================================
--- PostgreSQl Schema VBG Ledger - 49 tables
+-- PostgreSQl Schema VBG Ledger - 54 tables
 -- =========================================
 
 -- 1. Users
@@ -36,7 +36,19 @@ CREATE TABLE accounts (
     account_type VARCHAR(50),
     currency CHAR(3) DEFAULT 'EUR',
     balance NUMERIC(30, 2) DEFAULT 0,
+    available_balance NUMERIC(30, 2) DEFAULT 0,
+    blocked_balance NUMERIC(30, 2) DEFAULT 0,
+    reserved_balance NUMERIC(30, 2) DEFAULT 0,
     status VARCHAR(20) DEFAULT 'active',
+    -- Weavr integration fields
+    weavr_id VARCHAR(100) UNIQUE,
+    weavr_profile_id VARCHAR(100),
+    iban VARCHAR(34),
+    bic VARCHAR(11),
+    account_name VARCHAR(255),
+    -- Sync fields
+    last_weavr_sync TIMESTAMP,
+    sync_status VARCHAR(20) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -486,3 +498,105 @@ CREATE TABLE sca_challenges (
     created_at TIMESTAMP DEFAULT NOW(),
     completed_at TIMESTAMP
 );
+
+-- 50. Client Profiles (Consumers)
+CREATE TABLE consumers (
+    id VARCHAR(100) PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    weavr_id VARCHAR(100) UNIQUE,
+    type VARCHAR(20) DEFAULT 'consumer',
+    state VARCHAR(50) DEFAULT 'active',
+    root_user JSONB,
+    kyc JSONB,
+    tag VARCHAR(255),
+    -- Sync fields
+    last_weavr_sync TIMESTAMP,
+    sync_status VARCHAR(20) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 51. Corporate Profiles
+CREATE TABLE corporates (
+    id VARCHAR(100) PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    weavr_id VARCHAR(100) UNIQUE,
+    type VARCHAR(20) DEFAULT 'corporate',
+    state VARCHAR(50) DEFAULT 'active',
+    root_user JSONB,
+    kyb JSONB,
+    company JSONB,
+    tag VARCHAR(255),
+    -- Sync fields
+    last_weavr_sync TIMESTAMP,
+    sync_status VARCHAR(20) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 52. Balance History
+CREATE TABLE balance_history (
+    id SERIAL PRIMARY KEY,
+    account_id INT REFERENCES accounts(id),
+    previous_balance NUMERIC(30,2),
+    new_balance NUMERIC(30,2),
+    available_previous NUMERIC(30,2),
+    available_new NUMERIC(30,2),
+    blocked_previous NUMERIC(30,2),
+    blocked_new NUMERIC(30,2),
+    change_amount NUMERIC(30,2),
+    change_type VARCHAR(50), -- 'credit', 'debit', 'block', 'unblock', 'reserve', 'release'
+    transaction_id INT REFERENCES transactions(id),
+    weavr_transaction_id VARCHAR(100),
+    description TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 53. Weavr Sync Tracking
+CREATE TABLE weavr_sync (
+    id SERIAL PRIMARY KEY,
+    entity_type VARCHAR(50), -- 'account', 'card', 'consumer', 'corporate', 'transaction'
+    entity_id VARCHAR(100), -- ID local (peut être INT ou VARCHAR selon l'entité)
+    weavr_id VARCHAR(100), -- ID Weavr
+    weavr_profile_id VARCHAR(100), -- Profile ID Weavr si applicable
+    sync_status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'synced', 'failed', 'syncing'
+    sync_direction VARCHAR(20), -- 'to_weavr', 'from_weavr', 'bidirectional'
+    last_sync_attempt TIMESTAMP,
+    last_sync_success TIMESTAMP,
+    retry_count INT DEFAULT 0,
+    sync_errors JSONB,
+    webhook_data JSONB, -- Données reçues via webhook
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 54. Webhook Events
+CREATE TABLE webhook_events (
+    id SERIAL PRIMARY KEY,
+    weavr_event_id VARCHAR(100) UNIQUE,
+    event_type VARCHAR(100),
+    entity_type VARCHAR(50),
+    entity_id VARCHAR(100),
+    raw_payload JSONB,
+    processed BOOLEAN DEFAULT FALSE,
+    processing_attempts INT DEFAULT 0,
+    last_attempt TIMESTAMP,
+    processing_errors JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    processed_at TIMESTAMP
+);
+
+-- Indexes for performance
+CREATE INDEX idx_accounts_weavr_id ON accounts(weavr_id);
+CREATE INDEX idx_accounts_user_id ON accounts(user_id);
+CREATE INDEX idx_accounts_status ON accounts(status);
+CREATE INDEX idx_consumers_weavr_id ON consumers(weavr_id);
+CREATE INDEX idx_consumers_user_id ON consumers(user_id);
+CREATE INDEX idx_corporates_weavr_id ON corporates(weavr_id);
+CREATE INDEX idx_corporates_user_id ON corporates(user_id);
+CREATE INDEX idx_balance_history_account_id ON balance_history(account_id);
+CREATE INDEX idx_balance_history_created_at ON balance_history(created_at);
+CREATE INDEX idx_weavr_sync_entity ON weavr_sync(entity_type, entity_id);
+CREATE INDEX idx_weavr_sync_status ON weavr_sync(sync_status);
+CREATE INDEX idx_webhook_events_processed ON webhook_events(processed);
+CREATE INDEX idx_webhook_events_type ON webhook_events(event_type);

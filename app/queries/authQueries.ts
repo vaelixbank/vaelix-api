@@ -1,4 +1,5 @@
 import pool from '../utils/database';
+import crypto from 'crypto';
 
 export class AuthQueries {
   // Insert auth factor
@@ -281,5 +282,122 @@ export class AuthQueries {
       [id, status]
     );
     return result.rows[0];
+  }
+
+  // =========================================
+  // MOBILE AUTH METHODS
+  // =========================================
+
+  // Create session for mobile auth
+  static async createMobileSession(user_id: number, device_id: string, access_token: string, refresh_token: string) {
+    const sessionId = crypto.randomUUID();
+    const now = new Date();
+    const accessExpiry = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutes
+    const refreshExpiry = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    const result = await pool.query(
+      `INSERT INTO sessions (id, user_id, device_id, access_token, refresh_token, expires_at, refresh_expires_at, is_active, created_at, last_activity)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [sessionId, user_id, device_id, access_token, refresh_token, accessExpiry, refreshExpiry, true, now, now]
+    );
+    return result.rows[0];
+  }
+
+  // Get active session by ID
+  static async getActiveSessionById(sessionId: string) {
+    const result = await pool.query(
+      'SELECT * FROM sessions WHERE id = $1 AND is_active = true AND refresh_expires_at > NOW()',
+      [sessionId]
+    );
+    return result.rows[0];
+  }
+
+  // Update session activity
+  static async updateSessionActivity(sessionId: string) {
+    await pool.query(
+      'UPDATE sessions SET last_activity = NOW() WHERE id = $1',
+      [sessionId]
+    );
+  }
+
+  // Invalidate session
+  static async invalidateSession(sessionId: string) {
+    await pool.query(
+      'UPDATE sessions SET is_active = false WHERE id = $1',
+      [sessionId]
+    );
+  }
+
+  // Invalidate all user sessions
+  static async invalidateAllUserSessions(user_id: number) {
+    await pool.query(
+      'UPDATE sessions SET is_active = false WHERE user_id = $1',
+      [user_id]
+    );
+  }
+
+  // Create verification code
+  static async createVerificationCode(user_id: number, code: string, type: 'email' | 'sms') {
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
+    const result = await pool.query(
+      `INSERT INTO verification_codes (user_id, code, type, expires_at, created_at)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (user_id, type) DO UPDATE SET
+       code = EXCLUDED.code,
+       expires_at = EXCLUDED.expires_at,
+       created_at = EXCLUDED.created_at`,
+      [user_id, code, type, expiresAt, new Date()]
+    );
+    return result.rows[0];
+  }
+
+  // Get verification code
+  static async getVerificationCode(user_id: number, code: string, type: 'email' | 'sms') {
+    const result = await pool.query(
+      'SELECT * FROM verification_codes WHERE user_id = $1 AND code = $2 AND type = $3 AND expires_at > NOW()',
+      [user_id, code, type]
+    );
+    return result.rows[0];
+  }
+
+  // Delete verification code
+  static async deleteVerificationCode(user_id: number, type: 'email' | 'sms') {
+    await pool.query(
+      'DELETE FROM verification_codes WHERE user_id = $1 AND type = $2',
+      [user_id, type]
+    );
+  }
+
+  // Create password reset token
+  static async createPasswordResetToken(email: string, token: string) {
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    const result = await pool.query(
+      `INSERT INTO password_reset_tokens (email, token, expires_at, created_at)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (email) DO UPDATE SET
+       token = EXCLUDED.token,
+       expires_at = EXCLUDED.expires_at,
+       created_at = EXCLUDED.created_at`,
+      [email, token, expiresAt, new Date()]
+    );
+    return result.rows[0];
+  }
+
+  // Get password reset token
+  static async getPasswordResetToken(token: string) {
+    const result = await pool.query(
+      'SELECT * FROM password_reset_tokens WHERE token = $1 AND expires_at > NOW()',
+      [token]
+    );
+    return result.rows[0];
+  }
+
+  // Delete password reset token
+  static async deletePasswordResetToken(token: string) {
+    await pool.query(
+      'DELETE FROM password_reset_tokens WHERE token = $1',
+      [token]
+    );
   }
 }

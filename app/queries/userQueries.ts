@@ -153,4 +153,136 @@ export class UserQueries {
     const result = await pool.query('SELECT * FROM corporates WHERE id = $1', [id]);
     return result.rows[0];
   }
+
+  // =========================================
+  // WEAVR SYNCHRONIZATION METHODS
+  // =========================================
+
+  // Update consumer with Weavr data
+  static async updateConsumerWeavrData(id: string, weavrData: {
+    weavr_id?: string;
+    last_weavr_sync?: Date;
+    sync_status?: string;
+  }) {
+    const result = await pool.query(
+      `UPDATE consumers SET
+        weavr_id = $2,
+        last_weavr_sync = $3,
+        sync_status = $4,
+        updated_at = NOW()
+       WHERE id = $1 RETURNING *`,
+      [
+        id,
+        weavrData.weavr_id || null,
+        weavrData.last_weavr_sync || new Date(),
+        weavrData.sync_status || 'synced'
+      ]
+    );
+    return result.rows[0];
+  }
+
+  // Update consumer sync status
+  static async updateConsumerSyncStatus(id: string, sync_status: string, error_message?: string) {
+    const result = await pool.query(
+      'UPDATE consumers SET sync_status = $2, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id, sync_status]
+    );
+    return result.rows[0];
+  }
+
+  // Update corporate with Weavr data
+  static async updateCorporateWeavrData(id: string, weavrData: {
+    weavr_id?: string;
+    last_weavr_sync?: Date;
+    sync_status?: string;
+  }) {
+    const result = await pool.query(
+      `UPDATE corporates SET
+        weavr_id = $2,
+        last_weavr_sync = $3,
+        sync_status = $4,
+        updated_at = NOW()
+       WHERE id = $1 RETURNING *`,
+      [
+        id,
+        weavrData.weavr_id || null,
+        weavrData.last_weavr_sync || new Date(),
+        weavrData.sync_status || 'synced'
+      ]
+    );
+    return result.rows[0];
+  }
+
+  // Update corporate sync status
+  static async updateCorporateSyncStatus(id: string, sync_status: string, error_message?: string) {
+    const result = await pool.query(
+      'UPDATE corporates SET sync_status = $2, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id, sync_status]
+    );
+    return result.rows[0];
+  }
+
+  // Get pending sync consumers
+  static async getPendingSyncConsumers() {
+    const result = await pool.query(
+      "SELECT * FROM consumers WHERE sync_status IN ('pending', 'failed') ORDER BY created_at ASC"
+    );
+    return result.rows;
+  }
+
+  // Get pending sync corporates
+  static async getPendingSyncCorporates() {
+    const result = await pool.query(
+      "SELECT * FROM corporates WHERE sync_status IN ('pending', 'failed') ORDER BY created_at ASC"
+    );
+    return result.rows;
+  }
+
+  // =========================================
+  // MOBILE AUTH METHODS
+  // =========================================
+
+  // Create user with password hash for mobile auth
+  static async createUserWithPassword(email: string, full_name: string, phone: string, password_hash: string, device_id: string) {
+    const result = await pool.query(
+      `INSERT INTO users (email, full_name, phone, password_hash, device_id, is_verified, kyc_status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, false, 'pending', NOW(), NOW())
+       RETURNING id, email, phone, full_name, device_id, is_verified, kyc_status, created_at`,
+      [email, full_name, phone, password_hash, device_id]
+    );
+    return result.rows[0];
+  }
+
+  // Update user password
+  static async updateUserPassword(id: number, password_hash: string) {
+    const result = await pool.query(
+      'UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id, password_hash]
+    );
+    return result.rows[0];
+  }
+
+  // Update user device and last login
+  static async updateUserDeviceAndLogin(id: number, device_id: string) {
+    const result = await pool.query(
+      'UPDATE users SET device_id = $2, last_login = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id, device_id]
+    );
+    return result.rows[0];
+  }
+
+  // Mark user as verified
+  static async markUserAsVerified(id: number) {
+    const result = await pool.query(
+      'UPDATE users SET is_verified = true, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id]
+    );
+    return result.rows[0];
+  }
+
+  // Get user by email with password hash
+  static async getUserByEmailWithPassword(email: string) {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    return result.rows[0];
+  }
 }
