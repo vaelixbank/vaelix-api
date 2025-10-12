@@ -1,6 +1,6 @@
 # Support
 
-Thank you for using **Aether Calendar** — an open-source email client developed and maintained by [Sky Genesis Enterprise](https://skygenesisenterprise.com).
+Thank you for using **Vaelix Bank API** — an open-source email client developed and maintained by [Vaelix Bank](https://vaelixbank.com).
 
 We’re committed to providing a great experience, and there are several ways you can get support depending on your needs:
 
@@ -17,9 +17,9 @@ If you're using the open-source version of Aether Calendar and need help with:
 
 Please use one of the following channels:
 
-- 💬 [GitHub Discussions](https://github.com/skygenesisenterprise/aether-calendar/discussions)
-- 🐞 [GitHub Issues](https://github.com/skygenesisenterprise/aether-calendar/issues) – for bug reports only
-- 📚 [Documentation](https://wiki.skygenesisenterprise.com)
+- 💬 [GitHub Discussions](https://github.com/vaelixbank/vaelix-api/discussions)
+- 🐞 [GitHub Issues](https://github.com/vaelixbank/vaelix-api/issues) – for bug reports only
+- 📚 [Documentation](https://wiki.vaelixbank.com)
 
 Our community and contributors will do their best to assist.
 
@@ -37,7 +37,7 @@ If you are using Aether Mail in a professional or production environment and req
 
 We offer commercial support and enterprise packages.
 
-📧 Contact us at [support@skygenesisenterprise.com](mailto:support@skygenesisenterprise.com) for more information.
+📧 Contact us at [support@vaelixbank.com](mailto:support@vaelixbank.com) for more information.
 
 ---
 
@@ -47,13 +47,13 @@ If you discover a security vulnerability, please **do not open a public issue**.
 
 Instead, report it responsibly to our security team:
 
-🔒 [security@skygenesisenterprise.com](mailto:security@skygenesisenterprise.com)
+🔒 [security@vaelixbank.com](mailto:security@vaelixbank.com)
 
 ---
 
 ## 🙏 Contributing
 
-Want to help improve Aether Calendar?  
+Want to help improve Vaelix Bank API?  
 Check out our [CONTRIBUTING.md](./CONTRIBUTING.md) guide for how to get started.
 
 Thanks for supporting open-source!
