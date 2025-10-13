@@ -34,4 +34,4 @@ For commercial licensing, support, or enterprise inquiries, please contact:
 
 ---
 
-**Note:** Using Aether Mail in a commercial environment **without respecting the AGPLv3 terms or without a commercial license** may constitute a license violation.
+**Note:** Using Aether Mail in a commercial environment **without respecting the Apache 2.0 Licence terms or without a commercial license** may constitute a license violation.
