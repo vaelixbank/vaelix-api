@@ -42,6 +42,18 @@ export class WeavrService {
     }
   }
 
+  // Make request using stored service integration credentials
+  async makeRequestWithStoredCredentials(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, data?: any) {
+    const { ServiceQueries } = await import('../queries/serviceQueries');
+    const integration = await ServiceQueries.getServiceIntegration('weavr');
+
+    if (!integration) {
+      throw new Error('Weavr service integration not configured');
+    }
+
+    return this.makeRequest(method, url, data, integration.api_key, integration.auth_token);
+  }
+
   // Get card details formatted for wallet addition
   async getCardForWallet(cardId: string, apiKey: string, authToken: string) {
     try {

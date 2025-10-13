@@ -6,6 +6,7 @@ export interface ApiKey {
   key: string;
   secret: string;
   type: ApiKeyType;
+  name?: string;
   description?: string;
   expires_at?: Date;
   created_at: Date;
@@ -14,6 +15,7 @@ export interface ApiKey {
 export interface CreateApiKeyRequest {
   user_id: number;
   type: ApiKeyType;
+  name?: string;
   description?: string;
   expires_at?: Date;
 }

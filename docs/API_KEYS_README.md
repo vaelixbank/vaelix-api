@@ -10,9 +10,10 @@ The Vaelix Bank API implements a dual-key authentication system with two types o
 ## API Key Structure
 
 Each API key consists of:
-- `key`: Public identifier (32-character hex string)
+- `key`: Public identifier (vb_ + 48-character hex string, total 51 characters)
 - `secret`: Private secret (64-character hex string) - returned only on creation
 - `type`: Either 'client' or 'server'
+- `name`: Optional alias/name for the key (max 50 characters)
 - `user_id`: Associated user ID
 - `description`: Optional description
 - `expires_at`: Optional expiration date
@@ -60,6 +61,7 @@ api_secret: your_api_secret_here
   {
     "user_id": 123,
     "type": "client" | "server",
+    "name": "my-app-key", // Optional alias
     "description": "Optional description",
     "expires_at": "2024-12-31T23:59:59Z" // Optional
   }
@@ -88,12 +90,13 @@ api_secret: your_api_secret_here
 
 ```bash
 curl -X POST https://api.vaelixbank.com/api/keys \
-  -H "x-api-key: server_key_here" \
+  -H "x-api-key: vb_1234567890abcdef..." \
   -H "x-api-secret: server_secret_here" \
   -H "Content-Type: application/json" \
   -d '{
     "user_id": 123,
     "type": "client",
+    "name": "mobile-app-v1",
     "description": "Mobile app key",
     "expires_at": "2024-12-31T23:59:59Z"
   }'

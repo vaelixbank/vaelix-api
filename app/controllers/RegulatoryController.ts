@@ -35,22 +35,18 @@ export class RegulatoryController {
   }
 
   /**
-   * Generate IBAN for regulatory compliance
-   */
+    * Generate IBAN for regulatory compliance
+    */
   async generateIBAN(req: Request, res: Response) {
     try {
       const { account_id, country_code, holder_name } = req.body;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
       if (!account_id) {
         return ApiResponseHandler.error(res, 'account_id is required', 'VALIDATION_ERROR', 400);
       }
 
       const result = await this.regulatoryGateway.generateIBAN(
-        { account_id, country_code, holder_name },
-        apiKey,
-        authToken
+        { account_id, country_code, holder_name }
       );
 
       if (result.success) {
@@ -69,8 +65,8 @@ export class RegulatoryController {
   }
 
   /**
-   * Send external payment through regulatory gateway
-   */
+    * Send external payment through regulatory gateway
+    */
   async sendExternalPayment(req: Request, res: Response) {
     try {
       const {
@@ -80,9 +76,6 @@ export class RegulatoryController {
         beneficiary_details,
         description
       } = req.body;
-
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
       if (!from_account_id || !amount || !beneficiary_details) {
         return ApiResponseHandler.error(res, 'from_account_id, amount, and beneficiary_details are required', 'VALIDATION_ERROR', 400);
@@ -110,7 +103,7 @@ export class RegulatoryController {
         beneficiary_details,
         description,
         local_transaction_id: parseInt(localResult.transaction_id)
-      }, apiKey, authToken);
+      });
 
       if (regulatoryResult.success) {
         return ApiResponseHandler.success(res, {
@@ -129,13 +122,11 @@ export class RegulatoryController {
   }
 
   /**
-   * Confirm external receive (called by webhooks or manual confirmation)
-   */
+    * Confirm external receive (called by webhooks or manual confirmation)
+    */
   async confirmExternalReceive(req: Request, res: Response) {
     try {
       const { local_transaction_id, weavr_reference } = req.body;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
       if (!local_transaction_id || !weavr_reference) {
         return ApiResponseHandler.error(res, 'local_transaction_id and weavr_reference are required', 'VALIDATION_ERROR', 400);
@@ -143,9 +134,7 @@ export class RegulatoryController {
 
       const success = await this.regulatoryGateway.confirmExternalReceive(
         local_transaction_id,
-        weavr_reference,
-        apiKey,
-        authToken
+        weavr_reference
       );
 
       if (success) {
@@ -162,22 +151,18 @@ export class RegulatoryController {
   }
 
   /**
-   * Get account IBAN details
-   */
+    * Get account IBAN details
+    */
   async getAccountIBAN(req: Request, res: Response) {
     try {
       const { account_id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
       if (!account_id) {
         return ApiResponseHandler.error(res, 'account_id is required', 'VALIDATION_ERROR', 400);
       }
 
       const result = await this.regulatoryGateway.getAccountIBAN(
-        parseInt(account_id),
-        apiKey,
-        authToken
+        parseInt(account_id)
       );
 
       if (result.success) {

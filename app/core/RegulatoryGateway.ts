@@ -55,9 +55,9 @@ export class RegulatoryGateway {
    */
 
   /**
-   * Generate IBAN for an account (regulatory compliance)
-   */
-  async generateIBAN(request: IBANRequest, apiKey: string, authToken: string): Promise<IBANResult> {
+    * Generate IBAN for an account (regulatory compliance)
+    */
+  async generateIBAN(request: IBANRequest): Promise<IBANResult> {
     try {
       logger.info('Generating IBAN via Regulatory Gateway', { accountId: request.account_id });
 
@@ -67,16 +67,14 @@ export class RegulatoryGateway {
         return { success: false, error: 'Account not synced with regulatory provider' };
       }
 
-      // Request IBAN from Weavr
-      const ibanResult = await this.weavrService.makeRequest(
+      // Request IBAN from Weavr using stored credentials
+      const ibanResult = await this.weavrService.makeRequestWithStoredCredentials(
         'POST',
         `/multi/managed_accounts/${account.weavr_id}/iban`,
         {
           iban_country_code: request.country_code || 'FR',
           iban_holder_name: request.holder_name || account.account_name || `Account ${account.id}`
-        },
-        apiKey,
-        authToken
+        }
       );
 
       // Extract IBAN details
@@ -111,9 +109,9 @@ export class RegulatoryGateway {
   }
 
   /**
-   * Send payment to external beneficiary (regulatory transmission)
-   */
-  async sendExternalPayment(request: ExternalPaymentRequest, apiKey: string, authToken: string): Promise<ExternalPaymentResult> {
+    * Send payment to external beneficiary (regulatory transmission)
+    */
+  async sendExternalPayment(request: ExternalPaymentRequest): Promise<ExternalPaymentResult> {
     try {
       logger.info('Sending external payment via Regulatory Gateway', {
         accountId: request.from_account_id,
@@ -144,13 +142,11 @@ export class RegulatoryGateway {
         description: request.description || 'External payment'
       };
 
-      // Send via Weavr
-      const weavrResult = await this.weavrService.makeRequest(
+      // Send via Weavr using stored credentials
+      const weavrResult = await this.weavrService.makeRequestWithStoredCredentials(
         'POST',
         '/multi/sends',
-        sendData,
-        apiKey,
-        authToken
+        sendData
       );
 
       // Confirm the local transaction
@@ -178,9 +174,9 @@ export class RegulatoryGateway {
   }
 
   /**
-   * Receive external payment (regulatory confirmation)
-   */
-  async confirmExternalReceive(localTransactionId: number, weavrReference: string, apiKey: string, authToken: string): Promise<boolean> {
+    * Confirm external receive (regulatory confirmation)
+    */
+  async confirmExternalReceive(localTransactionId: number, weavrReference: string): Promise<boolean> {
     try {
       logger.info('Confirming external receive via Regulatory Gateway', {
         localTransactionId,
@@ -240,21 +236,18 @@ export class RegulatoryGateway {
   }
 
   /**
-   * Get account IBAN details (read-only regulatory info)
-   */
-  async getAccountIBAN(accountId: number, apiKey: string, authToken: string): Promise<IBANResult> {
+    * Get account IBAN details (read-only regulatory info)
+    */
+  async getAccountIBAN(accountId: number): Promise<IBANResult> {
     try {
       const account = await AccountQueries.getAccountById(accountId);
       if (!account?.weavr_id) {
         return { success: false, error: 'Account not synced with regulatory provider' };
       }
 
-      const ibanResult = await this.weavrService.makeRequest(
+      const ibanResult = await this.weavrService.makeRequestWithStoredCredentials(
         'GET',
-        `/multi/managed_accounts/${account.weavr_id}/iban`,
-        undefined,
-        apiKey,
-        authToken
+        `/multi/managed_accounts/${account.weavr_id}/iban`
       );
 
       if (ibanResult.bankAccountDetails && ibanResult.bankAccountDetails.length > 0) {

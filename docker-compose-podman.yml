@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    # Configuration spécifique pour Podman
+    security_opt:
+      - label:disable
+    # Si vous utilisez rootless podman, ajustez selon vos besoins

@@ -3,11 +3,15 @@ import { RegulatoryController } from '../controllers/RegulatoryController';
 import { RegulatoryGateway } from '../core/RegulatoryGateway';
 import { WeavrService } from '../services/weavrService';
 import { validateRequiredFields } from '../utils/validation';
+import { authenticateApiKey } from '../middleware/apiKeyAuth';
 
 const router = Router();
 const weavrService = new WeavrService();
 const regulatoryGateway = new RegulatoryGateway(weavrService);
 const regulatoryController = new RegulatoryController(regulatoryGateway);
+
+// All regulatory routes require API key authentication
+router.use(authenticateApiKey);
 
 // =========================================
 // REGULATORY OPERATIONS - LIMITED WEAVR INTERACTION

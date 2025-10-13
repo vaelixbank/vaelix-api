@@ -133,7 +133,7 @@ export const validateAccountData = (req: Request, res: Response, next: NextFunct
 };
 
 export const validateApiKeyData = (req: Request, res: Response, next: NextFunction) => {
-  const { user_id, type, expires_at } = req.body;
+  const { user_id, type, name, expires_at } = req.body;
 
   if (!user_id || typeof user_id !== 'number') {
     return res.status(400).json({
@@ -146,6 +146,13 @@ export const validateApiKeyData = (req: Request, res: Response, next: NextFuncti
     return res.status(400).json({
       error: 'Type must be either "client" or "server"',
       code: 'INVALID_API_KEY_TYPE'
+    });
+  }
+
+  if (name && (typeof name !== 'string' || name.length > 50)) {
+    return res.status(400).json({
+      error: 'Name must be a string with maximum 50 characters',
+      code: 'INVALID_API_KEY_NAME'
     });
   }
 

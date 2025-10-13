@@ -52,10 +52,11 @@ export class AuthQueries {
   }
 
   // Insert API key
-  static async createApiKey(user_id: number, key: string, secret: string, description?: string) {
+  static async createApiKey(user_id: number, key: string, secret: string, type: string = 'client', name?: string, description?: string, expires_at?: Date) {
+    const hashedSecret = await bcrypt.hash(secret, 12);
     const result = await pool.query(
-      'INSERT INTO api_keys (user_id, key, secret, description, created_at) VALUES ($1, $2, $3, $4, NOW()) RETURNING id',
-      [user_id, key, secret, description]
+      'INSERT INTO api_keys (user_id, key, secret, type, name, description, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING id, user_id, key, type, name, description, expires_at, created_at',
+      [user_id, key, hashedSecret, type, name, description, expires_at]
     );
     return result.rows[0];
   }
@@ -80,6 +81,33 @@ export class AuthQueries {
       [user_id]
     );
     return result.rows;
+  }
+
+  // Update API key
+  static async updateApiKey(id: number, description?: string, expires_at?: Date) {
+    const result = await pool.query(
+      'UPDATE api_keys SET description = COALESCE($2, description), expires_at = CASE WHEN $3 IS NOT NULL THEN $3 ELSE expires_at END, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id, description, expires_at]
+    );
+    return result.rows[0];
+  }
+
+  // Get all API keys (admin access)
+  static async getAllApiKeys(limit: number = 100, offset: number = 0) {
+    const result = await pool.query(
+      'SELECT id, user_id, key, type, description, expires_at, created_at FROM api_keys ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    return result.rows;
+  }
+
+  // Delete API key
+  static async deleteApiKey(id: number) {
+    const result = await pool.query(
+      'DELETE FROM api_keys WHERE id = $1 RETURNING *',
+      [id]
+    );
+    return result.rows[0];
   }
 
   // Insert approval
