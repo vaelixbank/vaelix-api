@@ -102,6 +102,22 @@ CREATE TABLE vibans_cards (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- 6.5 Card Provisioning
+CREATE TABLE card_provisioning (
+    id SERIAL PRIMARY KEY,
+    card_id VARCHAR(100) NOT NULL,
+    wallet_type VARCHAR(20) NOT NULL CHECK (wallet_type IN ('apple_pay', 'google_pay')),
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'success', 'failed', 'revoked')),
+    device_id VARCHAR(100),
+    wallet_account_id VARCHAR(100),
+    provisioned_at TIMESTAMP,
+    last_attempt TIMESTAMP,
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(card_id, wallet_type)
+);
+
 -- 7. Transactions
 CREATE TABLE transactions (
     id SERIAL PRIMARY KEY,

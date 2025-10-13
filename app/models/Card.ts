@@ -36,6 +36,11 @@ export interface CreateManagedCardRequest {
   brand: 'visa' | 'mastercard';
   currency: string;
   tag?: string;
+  digitalWallets?: {
+    pushProvisioningEnabled?: boolean;
+    walletsEnabled?: boolean;
+    artworkReference?: string;
+  };
 }
 
 export interface UpdateManagedCardRequest {
@@ -109,6 +114,61 @@ export interface CardTransaction {
     country: string;
   };
   created_at: string;
+}
+
+export interface CardProvisioning {
+  id: number;
+  card_id: string;
+  wallet_type: 'apple_pay' | 'google_pay';
+  status: 'pending' | 'processing' | 'success' | 'failed' | 'revoked';
+  device_id?: string;
+  wallet_account_id?: string;
+  provisioned_at?: Date;
+  last_attempt?: Date;
+  error_message?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface ApplePayProvisioningRequest {
+  certificates: string[];
+  nonce: string;
+  nonceSignature: string;
+}
+
+export interface GooglePayProvisioningRequest {
+  clientDeviceId: string;
+  clientWalletAccountId: string;
+}
+
+export interface ApplePayProvisioningResponse {
+  cards: Array<{
+    suffix: string;
+    expirationMonth: string;
+    expirationYear: string;
+    cardholderName: string;
+    paymentData: {
+      version: string;
+      data: string;
+      signature: string;
+      header: {
+        ephemeralPublicKey: string;
+        transactionId: string;
+        publicKeyHash: string;
+      };
+    };
+  }>;
+}
+
+export interface GooglePayProvisioningResponse {
+  paymentCard: {
+    cardNumber: string;
+    expirationMonth: string;
+    expirationYear: string;
+    cardholderName: string;
+    authMethod: string;
+    fpanLastFour: string;
+  };
 }
 
 export interface AuthorizationEvent {

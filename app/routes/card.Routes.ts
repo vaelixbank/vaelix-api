@@ -1,12 +1,14 @@
 import { Router } from 'express';
 import { CardController } from '../controllers/CardController';
 import { WeavrService } from '../services/weavrService';
+import { PushProvisioningService } from '../services/pushProvisioningService';
 import { weavrSyncService } from '../services/weavrSyncService';
 import { validateRequiredFields } from '../utils/validation';
 
 const router = Router();
 const weavrService = new WeavrService();
-const cardController = new CardController(weavrService);
+const pushProvisioningService = new PushProvisioningService(weavrService);
+const cardController = new CardController(weavrService, pushProvisioningService);
 
 // Get all managed cards
 router.get('/', (req, res) =>
@@ -76,6 +78,41 @@ router.delete('/:id/spend-rules', (req, res) =>
 // Get wallet details for a managed card
 router.get('/:id/wallet-details', (req, res) =>
   cardController.getCardWalletDetails(req, res)
+);
+
+// Get wallet details for a managed card
+router.get('/:id/wallet-details', (req, res) =>
+  cardController.getCardWalletDetails(req, res)
+);
+
+// Check provisioning eligibility
+router.get('/:id/provisioning/eligibility', (req, res) =>
+  cardController.checkProvisioningEligibility(req, res)
+);
+
+// Provision card for Apple Pay
+router.post('/:id/provisioning/apple-pay', validateRequiredFields(['certificates', 'nonce', 'nonceSignature']), (req, res) =>
+  cardController.provisionForApplePay(req, res)
+);
+
+// Provision card for Google Pay
+router.post('/:id/provisioning/google-pay', validateRequiredFields(['clientDeviceId', 'clientWalletAccountId']), (req, res) =>
+  cardController.provisionForGooglePay(req, res)
+);
+
+// Get provisioning status
+router.get('/:id/provisioning/status', (req, res) =>
+  cardController.getProvisioningStatus(req, res)
+);
+
+// Get provisioning history
+router.get('/:id/provisioning/history', (req, res) =>
+  cardController.getProvisioningHistory(req, res)
+);
+
+// Revoke provisioning
+router.post('/:id/provisioning/revoke', validateRequiredFields(['walletType']), (req, res) =>
+  cardController.revokeProvisioning(req, res)
 );
 
 // Webhook for card authorization forwarding

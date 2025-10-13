@@ -257,7 +257,6 @@ export class CardQueries {
     );
     return result.rows;
   }
-
   // =========================================
   // WALLET PREPARATION METHODS
   // =========================================
@@ -343,5 +342,65 @@ export class CardQueries {
        WHERE id = $1`,
       [cardId]
     );
+  }
+
+  // =========================================
+  // CARD PROVISIONING METHODS
+  // =========================================
+
+  // Create provisioning record
+  static async createProvisioningRecord(cardId: string, walletType: 'apple_pay' | 'google_pay', deviceId?: string, walletAccountId?: string) {
+    const result = await pool.query(
+      `INSERT INTO card_provisioning (
+        card_id, wallet_type, device_id, wallet_account_id
+      ) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [cardId, walletType, deviceId, walletAccountId]
+    );
+    return result.rows[0];
+  }
+
+  // Update provisioning status
+  static async updateProvisioningStatus(id: number, status: string, errorMessage?: string) {
+    const result = await pool.query(
+      `UPDATE card_provisioning SET
+        status = $2,
+        error_message = $3,
+        last_attempt = NOW(),
+        provisioned_at = CASE WHEN $2 = 'success' THEN NOW() ELSE provisioned_at END,
+        updated_at = NOW()
+       WHERE id = $1 RETURNING *`,
+      [id, status, errorMessage]
+    );
+    return result.rows[0];
+  }
+
+  // Get provisioning record
+  static async getProvisioningRecord(cardId: string, walletType: 'apple_pay' | 'google_pay') {
+    const result = await pool.query(
+      'SELECT * FROM card_provisioning WHERE card_id = $1 AND wallet_type = $2',
+      [cardId, walletType]
+    );
+    return result.rows[0];
+  }
+
+  // Get all provisioning records for card
+  static async getCardProvisioningRecords(cardId: string) {
+    const result = await pool.query(
+      'SELECT * FROM card_provisioning WHERE card_id = $1 ORDER BY created_at DESC',
+      [cardId]
+    );
+    return result.rows;
+  }
+
+  // Revoke provisioning
+  static async revokeProvisioning(cardId: string, walletType: 'apple_pay' | 'google_pay') {
+    const result = await pool.query(
+      `UPDATE card_provisioning SET
+        status = 'revoked',
+        updated_at = NOW()
+       WHERE card_id = $1 AND wallet_type = $2 RETURNING *`,
+      [cardId, walletType]
+    );
+    return result.rows[0];
   }
 }
