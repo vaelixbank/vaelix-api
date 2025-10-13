@@ -41,6 +41,28 @@ export class WeavrService {
       throw error;
     }
   }
+
+  // Get card details formatted for wallet addition
+  async getCardForWallet(cardId: string, apiKey: string, authToken: string) {
+    try {
+      const cardData = await this.makeRequest('GET', `/multi/managed_cards/${cardId}`, undefined, apiKey, authToken);
+
+      // Extract and format details for wallet
+      const expiryParts = cardData.expiryMmyy ? cardData.expiryMmyy.split('/') : ['', ''];
+      const expiryMonth = expiryParts[0] || '';
+      const expiryYear = expiryParts[1] ? '20' + expiryParts[1] : '';
+
+      return {
+        card_number: cardData.cardNumber?.value || '',
+        cvv: cardData.cvv?.value || '',
+        expiry_month: expiryMonth,
+        expiry_year: expiryYear,
+        name_on_card: cardData.nameOnCard || ''
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to get card details for wallet: ${error.message}`);
+    }
+  }
 }
 
 export const weavrService = new WeavrService();

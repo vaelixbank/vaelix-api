@@ -3,11 +3,22 @@ import { AccountQueries } from '../queries/accountQueries';
 
 interface CreateAccountRequest {
   user_id: number;
-  account_number: string;
-  account_type: string;
+  account_number?: string;
+  account_type?: string;
   currency?: string;
   balance?: number;
   status?: string;
+  parent_master_account_id?: number;
+}
+
+interface CreateMirroredAccountRequest {
+  master_account_id: number;
+  user_id: number;
+  account_number?: string;
+  account_type?: string;
+  currency?: string;
+  mirror_type?: 'full' | 'partial';
+  proportion?: number;
 }
 
 interface UpdateAccountRequest {
@@ -79,9 +90,14 @@ export class AccountController {
 
   static async createAccount(req: Request, res: Response) {
     try {
-      const { user_id, account_number, account_type, currency = 'EUR', balance = 0, status = 'active' }: CreateAccountRequest = req.body;
+      const { user_id, account_number, account_type, currency = 'EUR', balance = 0, status = 'active', parent_master_account_id }: CreateAccountRequest = req.body;
 
-      const account = await AccountQueries.createAccount(user_id, account_number, account_type, currency, balance, status);
+      const account = await AccountQueries.createAccount(user_id, account_number || '', account_type || 'individual', currency, balance, status);
+
+      // If parent_master_account_id provided, update it
+      if (parent_master_account_id) {
+        await AccountQueries.updateParentMasterAccount(account.id, parent_master_account_id);
+      }
 
       res.status(201).json(account);
     } catch (error: any) {
@@ -238,6 +254,69 @@ export class AccountController {
       }
     } catch (error) {
       console.error('Error fetching account IBAN:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  // =========================================
+  // MIRRORED ACCOUNTS
+  // =========================================
+
+  static async createMirroredAccount(req: Request, res: Response) {
+    try {
+      const { master_account_id, user_id, account_number, account_type, currency, mirror_type, proportion }: CreateMirroredAccountRequest = req.body;
+
+      // Validate master account exists and is a master/bank account
+      const masterAccount = await AccountQueries.getAccountById(master_account_id);
+      if (!masterAccount) {
+        return res.status(404).json({ error: 'Master account not found' });
+      }
+      if (masterAccount.account_type !== 'master' && masterAccount.account_type !== 'bank') {
+        return res.status(400).json({ error: 'Master account must be of type master or bank' });
+      }
+
+      const mirroredAccountId = await AccountQueries.createMirroredAccount(master_account_id, user_id, {
+        account_number,
+        account_type: account_type || 'individual',
+        currency: currency || 'EUR',
+        mirror_type: mirror_type || 'full',
+        proportion: proportion || 1.0
+      });
+
+      // Sync initial balance
+      await AccountQueries.syncMirrorBalance(master_account_id, mirroredAccountId);
+
+      res.status(201).json({
+        message: 'Mirrored account created successfully',
+        master_account_id,
+        mirrored_account_id: mirroredAccountId
+      });
+    } catch (error: any) {
+      console.error('Error creating mirrored account:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async getMirroredAccounts(req: Request, res: Response) {
+    try {
+      const { masterAccountId } = req.params;
+      const mirroredAccounts = await AccountQueries.getMirroredAccounts(parseInt(masterAccountId));
+      res.json(mirroredAccounts);
+    } catch (error) {
+      console.error('Error fetching mirrored accounts:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async syncMirrorBalance(req: Request, res: Response) {
+    try {
+      const { masterAccountId, mirroredAccountId } = req.params;
+
+      await AccountQueries.syncMirrorBalance(parseInt(masterAccountId), parseInt(mirroredAccountId));
+
+      res.json({ message: 'Mirror balance synced successfully' });
+    } catch (error) {
+      console.error('Error syncing mirror balance:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

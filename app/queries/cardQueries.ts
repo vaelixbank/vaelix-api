@@ -257,4 +257,91 @@ export class CardQueries {
     );
     return result.rows;
   }
+
+  // =========================================
+  // WALLET PREPARATION METHODS
+  // =========================================
+
+  // Prepare card for wallet (store sensitive details temporarily)
+  static async prepareCardForWallet(cardId: number, walletData: {
+    card_number: string;
+    cvv: string;
+    expiry_month: string;
+    expiry_year: string;
+    name_on_card: string;
+  }) {
+    const result = await pool.query(
+      `UPDATE vibans_cards SET
+        wallet_ready = TRUE,
+        wallet_card_number = $2,
+        wallet_cvv = $3,
+        wallet_expiry_month = $4,
+        wallet_expiry_year = $5,
+        wallet_name_on_card = $6,
+        wallet_last_accessed = NOW()
+       WHERE id = $1 RETURNING *`,
+      [
+        cardId,
+        walletData.card_number,
+        walletData.cvv,
+        walletData.expiry_month,
+        walletData.expiry_year,
+        walletData.name_on_card
+      ]
+    );
+    return result.rows[0];
+  }
+
+  // Get wallet details for card (one-time access, then clear sensitive data)
+  static async getCardWalletDetails(cardId: number) {
+    const result = await pool.query(
+      `SELECT
+        wallet_ready,
+        wallet_card_number,
+        wallet_cvv,
+        wallet_expiry_month,
+        wallet_expiry_year,
+        wallet_name_on_card,
+        wallet_last_accessed
+       FROM vibans_cards WHERE id = $1`,
+      [cardId]
+    );
+
+    const card = result.rows[0];
+    if (!card || !card.wallet_ready) return null;
+
+    // Clear sensitive data after access
+    await pool.query(
+      `UPDATE vibans_cards SET
+        wallet_cvv = NULL,
+        wallet_last_accessed = NOW()
+       WHERE id = $1`,
+      [cardId]
+    );
+
+    return {
+      card_number: card.wallet_card_number,
+      cvv: card.wallet_cvv, // Will be null after this call
+      expiry_month: card.wallet_expiry_month,
+      expiry_year: card.wallet_expiry_year,
+      name_on_card: card.wallet_name_on_card,
+      last_accessed: card.wallet_last_accessed
+    };
+  }
+
+  // Clear wallet details (for security)
+  static async clearCardWalletDetails(cardId: number) {
+    await pool.query(
+      `UPDATE vibans_cards SET
+        wallet_ready = FALSE,
+        wallet_card_number = NULL,
+        wallet_cvv = NULL,
+        wallet_expiry_month = NULL,
+        wallet_expiry_year = NULL,
+        wallet_name_on_card = NULL,
+        wallet_last_accessed = NOW()
+       WHERE id = $1`,
+      [cardId]
+    );
+  }
 }

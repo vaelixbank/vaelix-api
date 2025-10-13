@@ -44,6 +44,8 @@ CREATE TABLE accounts (
     blocked_balance NUMERIC(30, 2) DEFAULT 0,
     reserved_balance NUMERIC(30, 2) DEFAULT 0,
     status VARCHAR(20) DEFAULT 'active',
+    -- Mirroring fields
+    parent_master_account_id INT REFERENCES accounts(id),
     -- Weavr integration fields
     weavr_id VARCHAR(100) UNIQUE,
     weavr_profile_id VARCHAR(100),
@@ -55,6 +57,19 @@ CREATE TABLE accounts (
     sync_status VARCHAR(20) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 4.5 Account Mirrors
+CREATE TABLE account_mirrors (
+    id SERIAL PRIMARY KEY,
+    master_account_id INT REFERENCES accounts(id) NOT NULL,
+    mirrored_account_id INT REFERENCES accounts(id) NOT NULL UNIQUE,
+    sync_enabled BOOLEAN DEFAULT TRUE,
+    mirror_type VARCHAR(20) DEFAULT 'full' CHECK (mirror_type IN ('full', 'partial')),
+    proportion NUMERIC(5, 4) DEFAULT 1.0000 CHECK (proportion > 0 AND proportion <= 1),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(master_account_id, mirrored_account_id)
 );
 
 -- 5. Wallets
@@ -76,6 +91,14 @@ CREATE TABLE vibans_cards (
     iban VARCHAR(50),
     currency CHAR(3) DEFAULT 'EUR',
     status VARCHAR(20) DEFAULT 'active',
+    -- Wallet preparation fields
+    wallet_ready BOOLEAN DEFAULT FALSE,
+    wallet_card_number VARCHAR(20),
+    wallet_cvv VARCHAR(4),
+    wallet_expiry_month VARCHAR(2),
+    wallet_expiry_year VARCHAR(4),
+    wallet_name_on_card VARCHAR(100),
+    wallet_last_accessed TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW()
 );
 

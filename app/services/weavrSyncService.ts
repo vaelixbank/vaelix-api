@@ -397,6 +397,9 @@ export class WeavrSyncService {
         case 'managed_card.state.changed':
           await this.handleCardStateChange(event.data);
           break;
+        case 'managed_card.authorisation_forwarding':
+          await this.handleCardAuthorization(event.data);
+          break;
         default:
           logger.warn('Unhandled webhook event type', { type: event.type });
       }
@@ -507,6 +510,62 @@ export class WeavrSyncService {
     await CardQueries.updateCardStatus(card.id, localState);
   }
 
+  private async handleCardAuthorization(data: any): Promise<void> {
+    const weavrCardId = data.cardId;
+    const transactionId = data.transactionId;
+    const amount = data.transactionAmount?.value || 0;
+    const currency = data.transactionAmount?.currency || 'EUR';
+    const merchantName = data.merchantDetails?.name;
+    const merchantCategory = data.merchantDetails?.category;
+    const merchantCountry = data.merchantDetails?.country;
+
+    logger.info('Processing card authorization', {
+      weavrCardId,
+      transactionId,
+      amount,
+      currency
+    });
+
+    // Find local card
+    const card = await CardQueries.getCardByWeavrId(weavrCardId);
+    if (!card) {
+      logger.warn('Card not found for authorization', { weavrCardId });
+      return;
+    }
+
+    // Basic approval logic (can be extended with rules)
+    let decision: 'APPROVED' | 'DECLINED' = 'APPROVED';
+
+    // Example: Decline if amount > 1000
+    if (amount > 1000) {
+      decision = 'DECLINED';
+    }
+
+    // Log the authorization event
+    await this.storeAuthorizationEvent({
+      card_id: weavrCardId,
+      transaction_id: transactionId,
+      amount,
+      currency,
+      merchant_name: merchantName,
+      merchant_category: merchantCategory,
+      merchant_country: merchantCountry,
+      decision,
+      processed_at: new Date().toISOString(),
+      response_time_ms: 0 // Can calculate if needed
+    });
+
+    // Return decision (in real webhook, this would be the response)
+    // For now, just log
+    logger.info('Authorization decision', { transactionId, decision });
+  }
+
+  private async storeAuthorizationEvent(event: any): Promise<void> {
+    // Store in a new table or log
+    // For now, just log - in production, create authorization_events table
+    logger.info('Authorization event stored', event);
+  }
+
   // =========================================
   // UTILITY METHODS
   // =========================================
@@ -538,10 +597,18 @@ export class WeavrSyncService {
 
   async syncPendingEntities(apiKey: string, authToken: string): Promise<void> {
     try {
-      // Sync pending accounts
+      // Sync pending accounts with retry logic
       const pendingAccounts = await AccountQueries.getPendingSyncAccounts();
       for (const account of pendingAccounts) {
-        await this.syncAccountCreation(account.id, apiKey, authToken);
+        try {
+          await this.syncAccountCreation(account.id, apiKey, authToken);
+        } catch (error: any) {
+          if (this.isRetryableError(error)) {
+            logger.warn('Retrying account sync', { accountId: account.id });
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Simple backoff
+            await this.syncAccountCreation(account.id, apiKey, authToken);
+          }
+        }
       }
 
       // Sync pending consumers
@@ -556,8 +623,44 @@ export class WeavrSyncService {
         await this.syncCorporateCreation(corporate.id, apiKey, authToken);
       }
 
+      // Sync pending cards
+      const pendingCards = await CardQueries.getPendingSyncCards();
+      for (const card of pendingCards) {
+        // Implement card sync if needed
+      }
+
     } catch (error: any) {
       logger.error('Batch sync failed', { error: error.message });
+    }
+  }
+
+  // =========================================
+  // MIRRORED ACCOUNTS SYNCHRONIZATION
+  // =========================================
+
+  async processMirrorSync(masterAccountId: number): Promise<void> {
+    try {
+      logger.info('Processing mirror sync for master account', { masterAccountId });
+
+      // Get all mirrored accounts for this master
+      const mirroredAccounts = await AccountQueries.getMirroredAccounts(masterAccountId);
+
+      // Sync each mirrored account
+      for (const mirror of mirroredAccounts) {
+        try {
+          await AccountQueries.syncMirrorBalance(masterAccountId, mirror.id);
+          logger.info('Mirror sync completed', { masterAccountId, mirroredAccountId: mirror.id });
+        } catch (error: any) {
+          logger.error('Mirror sync failed for account', {
+            masterAccountId,
+            mirroredAccountId: mirror.id,
+            error: error.message
+          });
+        }
+      }
+
+    } catch (error: any) {
+      logger.error('Mirror sync process failed', { masterAccountId, error: error.message });
     }
   }
 }

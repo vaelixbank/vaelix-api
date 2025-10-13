@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { CardController } from '../controllers/CardController';
 import { WeavrService } from '../services/weavrService';
+import { weavrSyncService } from '../services/weavrSyncService';
 import { validateRequiredFields } from '../utils/validation';
 
 const router = Router();
@@ -71,5 +72,22 @@ router.patch('/:id/spend-rules', (req, res) =>
 router.delete('/:id/spend-rules', (req, res) =>
   cardController.deleteSpendRules(req, res)
 );
+
+// Get wallet details for a managed card
+router.get('/:id/wallet-details', (req, res) =>
+  cardController.getCardWalletDetails(req, res)
+);
+
+// Webhook for card authorization forwarding
+router.post('/authorisation-forwarding', async (req, res) => {
+  try {
+    const event = req.body;
+    await weavrSyncService.processWebhookEvent(event);
+    res.status(200).json({ result: 'APPROVED' }); // Default response
+  } catch (error: any) {
+    console.error('Authorization forwarding error:', error);
+    res.status(200).json({ result: 'DECLINED' }); // Fail-safe
+  }
+});
 
 export default router;

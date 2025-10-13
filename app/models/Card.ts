@@ -13,8 +13,20 @@ export interface ManagedCard {
   };
   masked_pan: string;
   expiry_date: string;
+  // Wallet preparation fields
+  wallet_ready?: boolean;
+  wallet_details?: WalletDetails;
   created_at: string;
   updated_at: string;
+}
+
+export interface WalletDetails {
+  card_number?: string;
+  cvv?: string;
+  expiry_month?: string;
+  expiry_year?: string;
+  name_on_card?: string;
+  last_accessed?: Date;
 }
 
 export interface CreateManagedCardRequest {
@@ -97,4 +109,18 @@ export interface CardTransaction {
     country: string;
   };
   created_at: string;
+}
+
+export interface AuthorizationEvent {
+  id: string;
+  card_id: string;
+  transaction_id: string;
+  amount: number;
+  currency: string;
+  merchant_name?: string;
+  merchant_category?: string;
+  merchant_country?: string;
+  decision: 'APPROVED' | 'DECLINED';
+  processed_at: string;
+  response_time_ms: number;
 }

@@ -453,4 +453,41 @@ export class CardController {
       );
     }
   }
+
+  async getCardWalletDetails(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
+
+      logger.weavrRequest('GET', `/multi/managed_cards/${id}/wallet-details`, req.headers['x-request-id'] as string);
+
+      // Get card details from Weavr
+      const walletData = await this.weavrService.getCardForWallet(id, apiKey, authToken);
+
+      // Store in local DB for temporary access
+      const localCard = await CardQueries.getCardByWeavrId(id);
+      if (localCard) {
+        await CardQueries.prepareCardForWallet(localCard.id, walletData);
+      }
+
+      // Return formatted details (CVV will be cleared after first access)
+      const details = await CardQueries.getCardWalletDetails(localCard.id);
+
+      logger.weavrResponse('GET', `/multi/managed_cards/${id}/wallet-details`, 200, req.headers['x-request-id'] as string);
+
+      return ApiResponseHandler.success(res, details);
+    } catch (error: any) {
+      logger.weavrError('GET', `/multi/managed_cards/${req.params.id}/wallet-details`, error, req.headers['x-request-id'] as string);
+
+      const weavrError = parseWeavrError(error);
+      return ApiResponseHandler.error(
+        res,
+        weavrError.message,
+        weavrError.code,
+        getWeavrErrorStatus(weavrError),
+        weavrError.details
+      );
+    }
+  }
 }

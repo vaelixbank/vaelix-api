@@ -38,6 +38,15 @@ router.post('/db/:id/iban', AccountController.upgradeAccountToIBAN);
 // Get account IBAN (DB)
 router.get('/db/:id/iban', AccountController.getAccountIBAN);
 
+// Create mirrored account (DB)
+router.post('/db/mirror', AccountController.createMirroredAccount);
+
+// Get mirrored accounts for master (DB)
+router.get('/db/mirror/:masterAccountId', AccountController.getMirroredAccounts);
+
+// Sync mirror balance (DB)
+router.post('/db/mirror/:masterAccountId/:mirroredAccountId/sync', AccountController.syncMirrorBalance);
+
 // Weavr Operations
 // Get all managed accounts
 router.get('/', (req, res) =>

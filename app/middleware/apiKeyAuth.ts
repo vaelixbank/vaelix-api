@@ -64,3 +64,31 @@ export const requireClientKey = (req: AuthenticatedRequest, res: Response, next:
   }
   next();
 };
+
+export const requireRole = (requiredRole: string) => {
+  return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    if (!req.apiKey) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        code: 'MISSING_AUTH'
+      });
+    }
+
+    try {
+      const userRoles = await AuthQueries.getUserRoles(req.apiKey.user_id);
+      const hasRole = userRoles.some((role: any) => role.name === requiredRole);
+
+      if (!hasRole) {
+        return res.status(403).json({
+          error: `Role '${requiredRole}' required`,
+          code: 'INSUFFICIENT_ROLE'
+        });
+      }
+
+      next();
+    } catch (error) {
+      console.error('Error checking role:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  };
+};

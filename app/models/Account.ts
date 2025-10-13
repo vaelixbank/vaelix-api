@@ -10,6 +10,8 @@ export interface Account {
   blocked_balance: number;
   reserved_balance: number;
   status: string;
+  // Mirroring fields
+  parent_master_account_id?: number;
   // Weavr integration fields
   weavr_id?: string;
   weavr_profile_id?: string;
@@ -30,6 +32,18 @@ export interface CreateAccountRequest {
   currency?: string;
   balance?: number;
   status?: string;
+  parent_master_account_id?: number;
+}
+
+export interface AccountMirror {
+  id: number;
+  master_account_id: number;
+  mirrored_account_id: number;
+  sync_enabled: boolean;
+  mirror_type: 'full' | 'partial'; // full = copy all balances, partial = proportional
+  proportion?: number; // for partial mirroring
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface UpdateAccountRequest {

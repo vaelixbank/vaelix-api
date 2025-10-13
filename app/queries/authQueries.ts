@@ -117,6 +117,15 @@ export class AuthQueries {
     return result.rows;
   }
 
+  // Get user roles
+  static async getUserRoles(user_id: number) {
+    const result = await pool.query(
+      'SELECT r.name FROM roles r JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = $1',
+      [user_id]
+    );
+    return result.rows;
+  }
+
   // Insert AML flag
   static async createAmlFlag(user_id: number, transaction_id: number, reason: string) {
     await pool.query(

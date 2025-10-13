@@ -393,6 +393,15 @@ export class AccountQueries {
     return result.rows[0];
   }
 
+  // Update parent master account ID
+  static async updateParentMasterAccount(accountId: number, parentMasterAccountId: number) {
+    const result = await pool.query(
+      'UPDATE accounts SET parent_master_account_id = $2, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [accountId, parentMasterAccountId]
+    );
+    return result.rows[0];
+  }
+
   // Get all accounts (for admin/health checks)
   static async getAllAccounts(limit: number = 100) {
     const result = await pool.query(
@@ -400,5 +409,122 @@ export class AccountQueries {
       [limit]
     );
     return result.rows;
+  }
+
+  // =========================================
+  // MIRRORED ACCOUNTS METHODS
+  // =========================================
+
+  // Create a mirrored account
+  static async createMirroredAccount(masterAccountId: number, userId: number, accountData: {
+    account_number?: string;
+    account_type?: string;
+    currency?: string;
+    mirror_type?: 'full' | 'partial';
+    proportion?: number;
+  }) {
+    // First create the account
+    const accountResult = await pool.query(
+      `INSERT INTO accounts (
+        user_id, account_number, account_type, currency, balance, status,
+        parent_master_account_id, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) RETURNING id`,
+      [
+        userId,
+        accountData.account_number || null,
+        accountData.account_type || 'individual',
+        accountData.currency || 'EUR',
+        0, // initial balance 0
+        'active',
+        masterAccountId
+      ]
+    );
+
+    const mirroredAccountId = accountResult.rows[0].id;
+
+    // Create mirror relationship
+    await pool.query(
+      `INSERT INTO account_mirrors (
+        master_account_id, mirrored_account_id, mirror_type, proportion
+      ) VALUES ($1, $2, $3, $4)`,
+      [
+        masterAccountId,
+        mirroredAccountId,
+        accountData.mirror_type || 'full',
+        accountData.proportion || 1.0
+      ]
+    );
+
+    return mirroredAccountId;
+  }
+
+  // Get mirrored accounts for a master account
+  static async getMirroredAccounts(masterAccountId: number) {
+    const result = await pool.query(
+      `SELECT a.*, am.mirror_type, am.proportion, am.sync_enabled
+       FROM accounts a
+       JOIN account_mirrors am ON a.id = am.mirrored_account_id
+       WHERE am.master_account_id = $1`,
+      [masterAccountId]
+    );
+    return result.rows;
+  }
+
+  // Sync balance from master to mirrored account
+  static async syncMirrorBalance(masterAccountId: number, mirroredAccountId: number) {
+    // Get master balance
+    const master = await this.getAccountById(masterAccountId);
+    if (!master) throw new Error('Master account not found');
+
+    // Get mirror config
+    const mirrorResult = await pool.query(
+      'SELECT * FROM account_mirrors WHERE master_account_id = $1 AND mirrored_account_id = $2',
+      [masterAccountId, mirroredAccountId]
+    );
+    const mirror = mirrorResult.rows[0];
+    if (!mirror || !mirror.sync_enabled) return;
+
+    // Calculate mirrored balance
+    const mirroredBalance = mirror.mirror_type === 'full'
+      ? master.balance
+      : master.balance * mirror.proportion;
+
+    const mirroredAvailable = mirror.mirror_type === 'full'
+      ? master.available_balance
+      : master.available_balance * mirror.proportion;
+
+    // Update mirrored account
+    await pool.query(
+      `UPDATE accounts SET
+        balance = $2,
+        available_balance = $3,
+        blocked_balance = $4,
+        reserved_balance = $5,
+        updated_at = NOW()
+       WHERE id = $1`,
+      [
+        mirroredAccountId,
+        mirroredBalance,
+        mirroredAvailable,
+        mirror.mirror_type === 'full' ? master.blocked_balance : master.blocked_balance * mirror.proportion,
+        mirror.mirror_type === 'full' ? master.reserved_balance : master.reserved_balance * mirror.proportion
+      ]
+    );
+
+    // Record in balance history
+    await this.recordBalanceChange(mirroredAccountId, {
+      change_type: 'mirror_sync',
+      new_balance: mirroredBalance,
+      available_new: mirroredAvailable,
+      description: `Synced from master account ${masterAccountId}`
+    });
+  }
+
+  // Enable/disable mirror sync
+  static async setMirrorSync(mirroredAccountId: number, enabled: boolean) {
+    await pool.query(
+      'UPDATE account_mirrors SET sync_enabled = $2, updated_at = NOW() WHERE mirrored_account_id = $1',
+      [mirroredAccountId, enabled]
+    );
   }
 }
