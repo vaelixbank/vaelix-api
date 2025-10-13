@@ -1,11 +1,9 @@
 import { Router } from 'express';
 import { AuthController } from '../controllers/AuthController';
-import { WeavrService } from '../services/weavrService';
 import { validateRequiredFields } from '../utils/validation';
 
 const router = Router();
-const weavrService = new WeavrService();
-const authController = new AuthController(weavrService);
+const authController = new AuthController();
 
 // Login with password
 router.post('/login', validateRequiredFields(['identifier', 'password']), (req, res) =>

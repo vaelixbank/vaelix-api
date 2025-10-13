@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import config from './config';
+import config from './config/index';
 import authRoutes from './routes/auth.Routes';
 import passwordsRoutes from './routes/passwords.Routes';
 import scaRoutes from './routes/sca.Routes';
@@ -18,6 +18,7 @@ import apiKeysRoutes from './routes/apiKeys.Routes';
 import mobileAuthRoutes from './routes/mobileAuth.Routes';
 import regulatoryRoutes from './routes/regulatory.Routes';
 import { logger } from './utils/logger';
+import { checkDatabaseConnection } from './utils/database';
 
 const app = express();
 
@@ -65,7 +66,7 @@ app.use('/api/passwords', passwordsRoutes);
 app.use('/api/sca', scaRoutes);
 app.use('/api/corporates', corporatesRoutes);
 app.use('/api/consumers', consumersRoutes);
-app.use('/api/users', usersRoutes);
+console.log("Registering users routes");app.use('/api/users', usersRoutes);
 app.use('/api/beneficiaries', beneficiariesRoutes);
 app.use('/api/accounts', accountsRoutes);
 app.use('/api/cards', cardRoutes);

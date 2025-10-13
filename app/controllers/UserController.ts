@@ -16,6 +16,7 @@ interface UpdateUserRequest {
 
 export class UserController {
   static async getAllUsers(req: Request, res: Response) {
+    console.log("getAllUsers called");
     try {
       const users = await UserQueries.getAllUsers();
       res.json(users);

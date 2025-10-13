@@ -4,8 +4,10 @@ export class WeavrService {
   private client: AxiosInstance;
 
   constructor() {
+    const baseURL = process.env.WEAVR_API_BASE_URL || 'https://api.weavr.io';
+    console.log('WeavrService initialized with baseURL:', baseURL);
     this.client = axios.create({
-      baseURL: process.env.WEAVR_API_BASE_URL || 'https://api.weavr.io',
+      baseURL,
       timeout: 30000,
     });
   }

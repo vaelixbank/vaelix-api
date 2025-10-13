@@ -8,24 +8,28 @@ import { UserQueries } from '../queries/userQueries';
 import { AuthQueries } from '../queries/authQueries';
 
 export class AuthController {
-  constructor(private weavrService: WeavrService) {}
+  private weavrService: WeavrService;
+
+  constructor() {
+    this.weavrService = new WeavrService();
+  }
 
   async login(req: Request, res: Response) {
     try {
       const { identifier, password }: LoginRequest = req.body;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = process.env.WEAVR_API_KEY; // Use Weavr API key from env
       const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
 
-      logger.weavrRequest('POST', '/multi/access/login', req.headers['x-request-id'] as string);
+      logger.weavrRequest('POST', '/login_with_password', req.headers['x-request-id'] as string);
 
       const result = await this.weavrService.makeRequest(
         'POST',
-        '/multi/access/login',
-        { identifier, password },
+        '/login_with_password',
+        { email: identifier, password: { value: password } },
         apiKey
       );
 
-      logger.weavrResponse('POST', '/multi/access/login', 200, req.headers['x-request-id'] as string);
+      logger.weavrResponse('POST', '/multi/login_with_password', 200, req.headers['x-request-id'] as string);
 
       // Log successful login attempt
       const user = await UserQueries.getUserByEmail(identifier);
@@ -36,7 +40,7 @@ export class AuthController {
 
       return ApiResponseHandler.success(res, result);
     } catch (error: any) {
-      logger.weavrError('POST', '/multi/access/login', error, req.headers['x-request-id'] as string);
+      logger.weavrError('POST', '/multi/login_with_password', error, req.headers['x-request-id'] as string);
 
       // Log failed login attempt
       try {
@@ -63,22 +67,22 @@ export class AuthController {
   async loginBiometric(req: Request, res: Response) {
     try {
       const { identifier, biometric_token }: BiometricLoginRequest = req.body;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = process.env.WEAVR_API_KEY; // Use Weavr API key from env
 
-      logger.weavrRequest('POST', '/multi/access/login/biometric', req.headers['x-request-id'] as string);
+      logger.weavrRequest('POST', '/multi/login_with_password/biometric', req.headers['x-request-id'] as string);
 
       const result = await this.weavrService.makeRequest(
         'POST',
-        '/multi/access/login/biometric',
+        '/multi/login_with_password/biometric',
         { identifier, biometric_token },
         apiKey
       );
 
-      logger.weavrResponse('POST', '/multi/access/login/biometric', 200, req.headers['x-request-id'] as string);
+      logger.weavrResponse('POST', '/multi/login_with_password/biometric', 200, req.headers['x-request-id'] as string);
 
       return ApiResponseHandler.success(res, result);
     } catch (error: any) {
-      logger.weavrError('POST', '/multi/access/login/biometric', error, req.headers['x-request-id'] as string);
+      logger.weavrError('POST', '/multi/login_with_password/biometric', error, req.headers['x-request-id'] as string);
 
       const weavrError = parseWeavrError(error);
       return ApiResponseHandler.error(
@@ -93,24 +97,24 @@ export class AuthController {
 
   async getUserIdentities(req: Request, res: Response) {
     try {
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = process.env.WEAVR_API_KEY; // Use Weavr API key from env
       const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
-      logger.weavrRequest('GET', '/multi/access/identities', req.headers['x-request-id'] as string);
+      logger.weavrRequest('GET', '/access/identities', req.headers['x-request-id'] as string);
 
       const result = await this.weavrService.makeRequest(
         'GET',
-        '/multi/access/identities',
+        '/access/identities',
         undefined,
         apiKey,
         authToken
       );
 
-      logger.weavrResponse('GET', '/multi/access/identities', 200, req.headers['x-request-id'] as string);
+      logger.weavrResponse('GET', '/access/identities', 200, req.headers['x-request-id'] as string);
 
       return ApiResponseHandler.success(res, result);
     } catch (error: any) {
-      logger.weavrError('GET', '/multi/access/identities', error, req.headers['x-request-id'] as string);
+      logger.weavrError('GET', '/access/identities', error, req.headers['x-request-id'] as string);
 
       const weavrError = parseWeavrError(error);
       return ApiResponseHandler.error(
@@ -125,24 +129,24 @@ export class AuthController {
 
   async logout(req: Request, res: Response) {
     try {
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = process.env.WEAVR_API_KEY; // Use Weavr API key from env
       const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
-      logger.weavrRequest('POST', '/multi/access/logout', req.headers['x-request-id'] as string);
+      logger.weavrRequest('POST', '/access/logout', req.headers['x-request-id'] as string);
 
       const result = await this.weavrService.makeRequest(
         'POST',
-        '/multi/access/logout',
+        '/access/logout',
         req.body,
         apiKey,
         authToken
       );
 
-      logger.weavrResponse('POST', '/multi/access/logout', 200, req.headers['x-request-id'] as string);
+      logger.weavrResponse('POST', '/access/logout', 200, req.headers['x-request-id'] as string);
 
       return ApiResponseHandler.success(res, result);
     } catch (error: any) {
-      logger.weavrError('POST', '/multi/access/logout', error, req.headers['x-request-id'] as string);
+      logger.weavrError('POST', '/access/logout', error, req.headers['x-request-id'] as string);
 
       const weavrError = parseWeavrError(error);
       return ApiResponseHandler.error(
@@ -157,24 +161,24 @@ export class AuthController {
 
   async requestAccessToken(req: Request, res: Response) {
     try {
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = process.env.WEAVR_API_KEY; // Use Weavr API key from env
       const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
-      logger.weavrRequest('POST', '/multi/access/token', req.headers['x-request-id'] as string);
+      logger.weavrRequest('POST', '/access/token', req.headers['x-request-id'] as string);
 
       const result = await this.weavrService.makeRequest(
         'POST',
-        '/multi/access/token',
+        '/access/token',
         req.body,
         apiKey,
         authToken
       );
 
-      logger.weavrResponse('POST', '/multi/access/token', 200, req.headers['x-request-id'] as string);
+      logger.weavrResponse('POST', '/access/token', 200, req.headers['x-request-id'] as string);
 
       return ApiResponseHandler.success(res, result);
     } catch (error: any) {
-      logger.weavrError('POST', '/multi/access/token', error, req.headers['x-request-id'] as string);
+      logger.weavrError('POST', '/access/token', error, req.headers['x-request-id'] as string);
 
       const weavrError = parseWeavrError(error);
       return ApiResponseHandler.error(

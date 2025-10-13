@@ -10,8 +10,8 @@ export class WeavrAccountController {
 
   async getAllAccounts(req: Request, res: Response) {
     try {
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
-      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
+      const apiKey = req.headers['api_key'] as string;
+      const authToken = req.headers['auth_token'] as string;
 
       logger.weavrRequest('GET', '/multi/managed_accounts', req.headers['x-request-id'] as string);
 
@@ -43,7 +43,7 @@ export class WeavrAccountController {
   async createAccount(req: Request, res: Response) {
     try {
       const accountData: CreateManagedAccountRequest = req.body;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = req.headers['api_key'] as string;
       const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
       // Prepare data for Weavr, using account_type in tag if provided
@@ -83,7 +83,7 @@ export class WeavrAccountController {
   async getAccount(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = req.headers['api_key'] as string;
       const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
       logger.weavrRequest('GET', `/multi/managed_accounts/${req.params.id}`, req.headers['x-request-id'] as string);
@@ -117,7 +117,7 @@ export class WeavrAccountController {
     try {
       const { id } = req.params;
       const updateData: UpdateManagedAccountRequest = req.body;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = req.headers['api_key'] as string;
       const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
       logger.weavrRequest('PATCH', `/multi/managed_accounts/${req.params.id}`, req.headers['x-request-id'] as string);
@@ -150,7 +150,7 @@ export class WeavrAccountController {
   async blockAccount(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = req.headers['api_key'] as string;
       const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
       logger.weavrRequest('POST', `/multi/managed_accounts/${req.params.id}/block`, req.headers['x-request-id'] as string);
@@ -183,7 +183,7 @@ export class WeavrAccountController {
   async unblockAccount(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = req.headers['api_key'] as string;
       const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
       logger.weavrRequest('POST', `/multi/managed_accounts/${req.params.id}/unblock`, req.headers['x-request-id'] as string);
@@ -216,7 +216,7 @@ export class WeavrAccountController {
   async getAccountStatement(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = req.headers['api_key'] as string;
       const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
       logger.weavrRequest('GET', `/multi/managed_accounts/${req.params.id}/statement`, req.headers['x-request-id'] as string);
@@ -249,7 +249,7 @@ export class WeavrAccountController {
   async upgradeAccountWithIBAN(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = req.headers['api_key'] as string;
       const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
       logger.weavrRequest('POST', `/multi/managed_accounts/${req.params.id}/iban`, req.headers['x-request-id'] as string);
@@ -282,7 +282,7 @@ export class WeavrAccountController {
   async getAccountIBAN(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = req.headers['api_key'] as string;
       const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
       logger.weavrRequest('GET', `/multi/managed_accounts/${req.params.id}/iban`, req.headers['x-request-id'] as string);
@@ -315,7 +315,7 @@ export class WeavrAccountController {
   async removeAccount(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = req.headers['api_key'] as string;
       const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
       logger.weavrRequest('POST', `/multi/managed_accounts/${req.params.id}/remove`, req.headers['x-request-id'] as string);
@@ -345,10 +345,127 @@ export class WeavrAccountController {
     }
   }
 
+  async createAccountWithLocal(req: Request, res: Response) {
+    try {
+      const {
+        profile_id,
+        user_id,
+        account_name = 'Account',
+        account_type = 'current',
+        currency = 'EUR',
+        tag
+      } = req.body;
+      const apiKey = req.headers['api_key'] as string;
+      const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
+
+      if (!profile_id || !user_id) {
+        return ApiResponseHandler.error(res, 'profile_id and user_id are required', 'VALIDATION_ERROR', 400);
+      }
+
+      logger.info('Creating account with Weavr integration', { profile_id, user_id, account_name, account_type });
+
+      // Step 1: Create account in local database
+      const { AccountQueries } = await import('../queries/accountQueries');
+      const localAccount = await AccountQueries.createAccount(
+        user_id,
+        '', // account_number (empty for Weavr-managed)
+        account_type,
+        currency,
+        0, // initial balance
+        'active'
+      );
+
+      // Step 2: Create Weavr managed account
+      const weavrAccountData = {
+        profile_id,
+        name: account_name,
+        tag: tag || `${account_type}_${localAccount.id}`
+      };
+
+      logger.weavrRequest('POST', '/multi/managed_accounts', req.headers['x-request-id'] as string);
+
+      const weavrResult = await this.weavrService.makeRequest(
+        'POST',
+        '/multi/managed_accounts',
+        weavrAccountData,
+        apiKey,
+        authToken
+      );
+
+      logger.weavrResponse('POST', '/multi/managed_accounts', 201, req.headers['x-request-id'] as string);
+
+      // Step 3: Update local account with Weavr data
+      await AccountQueries.updateAccountWithWeavrData(localAccount.id, {
+        weavr_id: weavrResult.id,
+        iban: weavrResult.iban,
+        bic: weavrResult.bic,
+        available_balance: weavrResult.balance?.available || 0,
+        blocked_balance: weavrResult.balance?.blocked || 0,
+        reserved_balance: weavrResult.balance?.reserved || 0,
+        last_weavr_sync: new Date(),
+        sync_status: 'synced'
+      });
+
+      // Update weavr_profile_id and account_name separately
+      const pool = (await import('../utils/database')).default;
+      await pool.query(
+        'UPDATE accounts SET weavr_profile_id = $1, account_name = $2 WHERE id = $3',
+        [profile_id, account_name, localAccount.id]
+      );
+
+      // Step 4: Upgrade to vIBAN if not already provided
+      let ibanResult = null;
+      if (!weavrResult.iban) {
+        logger.weavrRequest('POST', `/multi/managed_accounts/${weavrResult.id}/iban`, req.headers['x-request-id'] as string);
+
+        ibanResult = await this.weavrService.makeRequest(
+          'POST',
+          `/multi/managed_accounts/${weavrResult.id}/iban`,
+          {},
+          apiKey,
+          authToken
+        );
+
+        logger.weavrResponse('POST', `/multi/managed_accounts/${weavrResult.id}/iban`, 200, req.headers['x-request-id'] as string);
+
+        // Update local account with IBAN if available
+        if (ibanResult.bankAccountDetails && ibanResult.bankAccountDetails.length > 0) {
+          const ibanDetails = ibanResult.bankAccountDetails[0];
+          await AccountQueries.updateAccountWithWeavrData(localAccount.id, {
+            iban: ibanDetails.details?.iban,
+            bic: ibanDetails.details?.bankIdentifierCode,
+            sync_status: ibanResult.state === 'ALLOCATED' ? 'synced' : 'pending_iban'
+          });
+        }
+      }
+
+      // Get final account data
+      const finalAccount = await AccountQueries.getAccountWithBalanceDetails(localAccount.id);
+
+      return ApiResponseHandler.created(res, {
+        local_account: finalAccount,
+        weavr_account: weavrResult,
+        iban_upgrade: ibanResult
+      });
+
+    } catch (error: any) {
+      logger.error('Account creation with Weavr integration failed', { error: error.message });
+
+      const weavrError = parseWeavrError(error);
+      return ApiResponseHandler.error(
+        res,
+        weavrError.message,
+        weavrError.code,
+        getWeavrErrorStatus(weavrError),
+        weavrError.details
+      );
+    }
+  }
+
   async createMasterAccount(req: Request, res: Response) {
     try {
       const { profile_id, user_id, account_name = 'Master Account', currency = 'EUR' } = req.body;
-      const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
+      const apiKey = req.headers['api_key'] as string;
       const authToken = req.headers['authorization'] as string || req.headers['auth_token'] as string;
 
       if (!profile_id || !user_id) {

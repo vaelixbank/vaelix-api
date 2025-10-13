@@ -1,5 +1,6 @@
 import pool from '../utils/database';
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 
 export class AuthQueries {
   // Insert auth factor
@@ -62,10 +63,14 @@ export class AuthQueries {
   // Get API key by key and secret
   static async getApiKey(key: string, secret: string) {
     const result = await pool.query(
-      'SELECT * FROM api_keys WHERE key = $1 AND secret = $2',
-      [key, secret]
+      'SELECT * FROM api_keys WHERE key = $1',
+      [key]
     );
-    return result.rows[0];
+    const apiKey = result.rows[0];
+    if (apiKey && await bcrypt.compare(secret, apiKey.secret)) {
+      return apiKey;
+    }
+    return null;
   }
 
   // Get user API keys

@@ -89,6 +89,11 @@ router.delete('/:id', (req, res) =>
   weavrAccountController.removeAccount(req, res)
 );
 
+// Create account with Weavr integration (local + Weavr)
+router.post('/integrated', validateRequiredFields(['profile_id', 'user_id']), (req, res) =>
+  weavrAccountController.createAccountWithLocal(req, res)
+);
+
 // Create master account with vIBAN and initial balance
 router.post('/master', validateRequiredFields(['profile_id', 'user_id']), (req, res) =>
   weavrAccountController.createMasterAccount(req, res)

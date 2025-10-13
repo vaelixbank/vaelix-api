@@ -9,6 +9,10 @@ CREATE TABLE users (
     full_name VARCHAR(255) NOT NULL,
     phone VARCHAR(20),
     kyc_status VARCHAR(50),
+    password_hash VARCHAR(255),
+    device_id VARCHAR(255),
+    is_verified BOOLEAN DEFAULT FALSE,
+    last_login TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -131,7 +135,9 @@ CREATE TABLE api_keys (
     user_id INT REFERENCES users(id),
     key VARCHAR(255) UNIQUE,
     secret VARCHAR(255),
+    type VARCHAR(20) CHECK (type IN ('client', 'server')),
     description TEXT,
+    expires_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
