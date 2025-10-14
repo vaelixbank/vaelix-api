@@ -16,6 +16,7 @@
 - [🚀 Features](#-features)
 - [🏗️ Architecture](#️-architecture)
 - [📦 Installation](#-installation)
+- [🗄️ Database Setup](#️-database-setup)
 - [⚡ Quick Start](#-quick-start)
 - [📚 Documentation](#-documentation)
 - [🔧 API Endpoints](#-api-endpoints)
@@ -83,10 +84,10 @@ graph TB
 ### Prerequisites
 
 - **Node.js** >= 18.0.0
-- **PostgreSQL** >= 13
+- **PostgreSQL** >= 13.0
 - **npm** or **yarn** package manager
 
-### Quick Setup
+### Clone and Install
 
 ```bash
 # Clone the repository
@@ -98,16 +99,94 @@ npm install
 
 # Copy environment configuration
 cp .env.example .env
-
-# Set up the database
-# (Configure your PostgreSQL connection in .env)
-
-# Run database migrations
-npm run migrate
-
-# Start development server
-npm run dev
 ```
+
+### Environment Configuration
+
+Configure your `.env` file with the required environment variables:
+
+```env
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+
+# Database Configuration
+DB_HOST=localhost
+DB_NAME=vaelixbank
+DB_USER=vaelixbank_user
+DB_PASSWORD=your_secure_password
+DB_PORT=5432
+
+# Weavr API Configuration
+WEAVR_API_BASE_URL=https://sandbox.weavr.io
+WEAVR_API_KEY=your_weavr_api_key
+
+# JWT Configuration
+JWT_SECRET=your-super-secret-jwt-key
+JWT_REFRESH_SECRET=your-refresh-secret-key
+JWT_ACCESS_EXPIRY=15m
+JWT_REFRESH_EXPIRY=7d
+
+# Encryption Configuration
+ENCRYPTION_KEY=your-64-character-hex-key
+```
+
+## 🗄️ Database Setup
+
+### 1. Create PostgreSQL Database
+
+```bash
+# Create database and user (run as postgres superuser)
+sudo -u postgres psql
+
+# In PostgreSQL shell:
+CREATE DATABASE vaelixbank;
+CREATE USER vaelixbank_user WITH ENCRYPTED PASSWORD 'your_secure_password';
+GRANT ALL PRIVILEGES ON DATABASE vaelixbank TO vaelixbank_user;
+\q
+```
+
+### 2. Inject Database Schema
+
+**Option A: Automatic Injection (Recommended)**
+
+```bash
+# Configure your .env file with database credentials first
+# Then inject the complete schema automatically
+npm run db:schema
+```
+
+**Option B: Manual Injection**
+
+```bash
+# Using psql directly
+psql -h localhost -U vaelixbank_user -d vaelixbank -f data/schema-pgsql.sql
+
+# Or using environment variables
+psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f data/schema-pgsql.sql
+```
+
+### 3. Verify Schema Installation
+
+```bash
+# Check table count (should show 73 tables)
+psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';"
+
+# List all created tables
+psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;"
+```
+
+### Schema Contents
+
+The database schema includes **73 tables** covering:
+
+- **🏦 Core Banking**: Users, accounts, transactions, cards
+- **🔓 Open Banking**: Berlin Group API compliance (consents, payments, webhooks)
+- **🏢 BaaS**: Banking as a Service (customers, accounts, cards, transactions)
+- **⚖️ Legal Compliance**: KYC, AML, GDPR, regulatory reporting, audit trails
+- **🔗 Weavr Integration**: Synchronization tables and Weavr-specific fields
+
+For detailed schema documentation, see [`DATABASE_SETUP.md`](DATABASE_SETUP.md).
 
 ### Docker Setup
 

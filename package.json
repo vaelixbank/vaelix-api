@@ -18,6 +18,8 @@
     "format:check": "prettier --check \"**/*.{ts,js,json,md}\"",
     "prepare": "husky install",
     "migrate": "node migrate_encrypt_api_keys.js",
+    "db:schema": "node scripts/inject-schema.js",
+    "db:validate": "node scripts/validate_schema.sql",
     "docker:build": "docker build -t vaelix-api .",
     "docker:run": "docker run -p 3000:3000 vaelix-api",
     "docs:build": "typedoc",

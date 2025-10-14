@@ -18,6 +18,7 @@ import apiKeysRoutes from './routes/apiKeys.Routes';
 import serviceIntegrationsRoutes from './routes/serviceIntegrations.Routes';
 import mobileAuthRoutes from './routes/mobileAuth.Routes';
 import regulatoryRoutes from './routes/regulatory.Routes';
+import openBankingRoutes from './routes/openBanking.Routes';
 import { logger } from './utils/logger';
 import { checkDatabaseConnection } from './utils/database';
 import { apiLimiter, authLimiter, sensitiveOperationLimiter } from './middleware/rateLimit';
@@ -103,6 +104,7 @@ app.use('/api/keys', apiKeysRoutes);
 app.use('/api/service-integrations', serviceIntegrationsRoutes);
 app.use('/api/auth/mobile', mobileAuthRoutes);
 app.use('/api/regulatory', regulatoryRoutes);
+app.use('/api/open-banking', openBankingRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

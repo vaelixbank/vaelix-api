@@ -25,6 +25,12 @@ export class AccountQueries {
     return result.rows[0];
   }
 
+  // Select account by IBAN
+  static async getAccountByIban(iban: string) {
+    const result = await pool.query('SELECT * FROM accounts WHERE iban = $1', [iban]);
+    return result.rows[0];
+  }
+
   // Select user accounts
   static async getUserAccounts(user_id: number) {
     const result = await pool.query('SELECT * FROM accounts WHERE user_id = $1', [user_id]);
