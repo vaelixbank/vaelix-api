@@ -6,6 +6,7 @@ import { parseWeavrError, getWeavrErrorStatus } from '../utils/weavr';
 import { LoginRequest, BiometricLoginRequest } from '../models/Auth';
 import { UserQueries } from '../queries/userQueries';
 import { AuthQueries } from '../queries/authQueries';
+import { bruteForceProtection, recordFailedAttempt, clearAttempts } from '../middleware/bruteForceProtection';
 
 export class AuthController {
   private weavrService: WeavrService;
@@ -18,7 +19,7 @@ export class AuthController {
     try {
       const { identifier, password }: LoginRequest = req.body;
       const apiKey = process.env.WEAVR_API_KEY; // Use Weavr API key from env
-      const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+      const clientIP = req.ip || req.socket.remoteAddress || 'unknown';
 
       logger.weavrRequest('POST', '/login_with_password', req.headers['x-request-id'] as string);
 
@@ -31,23 +32,25 @@ export class AuthController {
 
       logger.weavrResponse('POST', '/multi/login_with_password', 200, req.headers['x-request-id'] as string);
 
-      // Log successful login attempt
+      // Log successful login attempt and clear brute force attempts
       const user = await UserQueries.getUserByEmail(identifier);
       if (user) {
         await UserQueries.createLoginAttempt(user.id, clientIP, true);
         await AuthQueries.createAuditLog(user.id, 'LOGIN_SUCCESS', 'auth', user.id);
+        clearAttempts(req, identifier); // Clear failed attempts on success
       }
 
       return ApiResponseHandler.success(res, result);
     } catch (error: any) {
       logger.weavrError('POST', '/multi/login_with_password', error, req.headers['x-request-id'] as string);
 
-      // Log failed login attempt
+      // Log failed login attempt and record for brute force protection
       try {
         const user = await UserQueries.getUserByEmail(req.body.identifier);
         if (user) {
-          await UserQueries.createLoginAttempt(user.id, req.ip || 'unknown', false);
+          await UserQueries.createLoginAttempt(user.id, req.ip || req.socket.remoteAddress || 'unknown', false);
           await AuthQueries.createAuditLog(user.id, 'LOGIN_FAILED', 'auth', user.id);
+          recordFailedAttempt(req, req.body.identifier); // Record failed attempt
         }
       } catch (logError) {
         logger.error('Failed to log login attempt', { error: logError }, req.headers['x-request-id'] as string);

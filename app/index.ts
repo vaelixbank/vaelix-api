@@ -20,6 +20,8 @@ import mobileAuthRoutes from './routes/mobileAuth.Routes';
 import regulatoryRoutes from './routes/regulatory.Routes';
 import { logger } from './utils/logger';
 import { checkDatabaseConnection } from './utils/database';
+import { apiLimiter, authLimiter, sensitiveOperationLimiter } from './middleware/rateLimit';
+import { sanitizeInput } from './utils/validation';
 
 const app = express();
 
@@ -28,7 +30,22 @@ app.set('trust proxy', 1);
 
 // Middleware
 app.use(helmet({
-  contentSecurityPolicy: false, // Disable CSP for API
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true
+  },
+  noSniff: true,
+  xssFilter: true,
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" }
 }));
 app.use(cors({
   origin: config.cors.origins,
@@ -36,6 +53,14 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Input sanitization
+app.use(sanitizeInput);
+
+// Rate limiting
+app.use('/api/auth', authLimiter); // Stricter limits for auth endpoints
+app.use('/api/transactions', sensitiveOperationLimiter); // Limits for sensitive operations
+app.use('/api', apiLimiter); // General API rate limiting
 
 // Request logging middleware
 app.use((req, res, next) => {

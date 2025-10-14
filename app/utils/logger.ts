@@ -1,3 +1,5 @@
+import { maskObject, maskHeaders } from './masking';
+
 interface LogEntry {
   level: 'info' | 'warn' | 'error' | 'debug';
   message: string;
@@ -25,22 +27,47 @@ class Logger {
   private log(entry: LogEntry): void {
     const message = this.formatMessage(entry);
 
+    // Mask sensitive data in logs
+    const maskedData = entry.data ? this.maskSensitiveData(entry.data) : undefined;
+
     switch (entry.level) {
       case 'info':
-        console.log(message, entry.data || '');
+        console.log(message, maskedData || '');
         break;
       case 'warn':
-        console.warn(message, entry.data || '');
+        console.warn(message, maskedData || '');
         break;
       case 'error':
-        console.error(message, entry.data || '');
+        console.error(message, maskedData || '');
         break;
       case 'debug':
         if (process.env.NODE_ENV === 'development') {
-          console.debug(message, entry.data || '');
+          console.debug(message, maskedData || '');
         }
         break;
     }
+  }
+
+  private maskSensitiveData(data: any): any {
+    if (!data) return data;
+
+    // Mask common sensitive fields
+    const sensitiveFields = [
+      'password', 'token', 'secret', 'key', 'apiKey', 'api_key', 'apiSecret', 'api_secret',
+      'email', 'phone', 'iban', 'cardNumber', 'card_number', 'authorization', 'auth_token'
+    ];
+
+    if (typeof data === 'object') {
+      // Handle headers separately
+      if (data.headers) {
+        data.headers = maskHeaders(data.headers);
+      }
+
+      // Mask other sensitive fields
+      return maskObject(data, sensitiveFields);
+    }
+
+    return data;
   }
 
   info(message: string, data?: any, requestId?: string, userId?: string): void {

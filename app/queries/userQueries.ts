@@ -1,11 +1,15 @@
 import pool from '../utils/database';
+import { encrypt, decrypt } from '../utils/crypto';
 
 export class UserQueries {
   // Insert new user
   static async createUser(email: string, full_name: string, phone?: string, kyc_status?: string) {
+    const encryptedEmail = encrypt(email);
+    const encryptedPhone = phone ? encrypt(phone) : null;
+
     const result = await pool.query(
       'INSERT INTO users (email, full_name, phone, kyc_status, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING id',
-      [email, full_name, phone, kyc_status]
+      [encryptedEmail, full_name, encryptedPhone, kyc_status]
     );
     return result.rows[0];
   }
@@ -22,13 +26,33 @@ export class UserQueries {
   // Select user by ID
   static async getUserById(id: number) {
     const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-    return result.rows[0];
+    const user = result.rows[0];
+    if (user) {
+      user.email = decrypt(user.email);
+      if (user.phone) user.phone = decrypt(user.phone);
+    }
+    return user;
   }
 
   // Select user by email
   static async getUserByEmail(email: string) {
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    return result.rows[0];
+    // Since email is encrypted, we need to get all users and decrypt to find the match
+    // In production, consider adding a hashed email field for efficient lookup
+    const result = await pool.query('SELECT * FROM users');
+    for (const user of result.rows) {
+      try {
+        const decryptedEmail = decrypt(user.email);
+        if (decryptedEmail === email) {
+          user.email = decryptedEmail;
+          if (user.phone) user.phone = decrypt(user.phone);
+          return user;
+        }
+      } catch (error) {
+        // Skip invalid encrypted data
+        continue;
+      }
+    }
+    return null;
   }
 
   // Select all users

@@ -48,7 +48,7 @@ export const validateRequiredFields = (fields: string[]) => {
     const missingFields: string[] = [];
 
     for (const field of fields) {
-      if (!req.body[field]) {
+      if (!req.body[field] && req.body[field] !== 0 && req.body[field] !== false) {
         missingFields.push(field);
       }
     }
@@ -63,6 +63,67 @@ export const validateRequiredFields = (fields: string[]) => {
 
     next();
   };
+};
+
+export const validateFieldLength = (field: string, minLength: number, maxLength: number) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const value = req.body[field];
+
+    if (value && typeof value === 'string') {
+      if (value.length < minLength) {
+        return res.status(400).json({
+          error: `${field} must be at least ${minLength} characters long`,
+          code: 'FIELD_TOO_SHORT'
+        });
+      }
+
+      if (value.length > maxLength) {
+        return res.status(400).json({
+          error: `${field} must be no more than ${maxLength} characters long`,
+          code: 'FIELD_TOO_LONG'
+        });
+      }
+    }
+
+    next();
+  };
+};
+
+export const sanitizeInput = (req: Request, res: Response, next: NextFunction) => {
+  // Basic input sanitization - remove potential XSS characters
+  const sanitizeString = (str: string): string => {
+    return str.replace(/[<>'"&]/g, (char) => {
+      switch (char) {
+        case '<': return '&lt;';
+        case '>': return '&gt;';
+        case '"': return '&quot;';
+        case "'": return '&#x27;';
+        case '&': return '&amp;';
+        default: return char;
+      }
+    });
+  };
+
+  const sanitizeObject = (obj: any): any => {
+    if (typeof obj === 'string') {
+      return sanitizeString(obj);
+    } else if (Array.isArray(obj)) {
+      return obj.map(sanitizeObject);
+    } else if (obj && typeof obj === 'object') {
+      const sanitized: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        sanitized[key] = sanitizeObject(value);
+      }
+      return sanitized;
+    }
+    return obj;
+  };
+
+  req.body = sanitizeObject(req.body);
+  req.query = sanitizeObject(req.query);
+  req.params = sanitizeObject(req.params);
+
+  next();
 };
 
 export const validateEmail = (email: string): boolean => {
@@ -82,6 +143,41 @@ export const validateCurrency = (currency: string): boolean => {
 
 export const validateAmount = (amount: number): boolean => {
   return typeof amount === 'number' && amount > 0 && Number.isFinite(amount);
+};
+
+export const validatePasswordStrength = (password: string): { isValid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+
+  if (password.length < 8) {
+    errors.push('Password must be at least 8 characters long');
+  }
+
+  if (!/[A-Z]/.test(password)) {
+    errors.push('Password must contain at least one uppercase letter');
+  }
+
+  if (!/[a-z]/.test(password)) {
+    errors.push('Password must contain at least one lowercase letter');
+  }
+
+  if (!/\d/.test(password)) {
+    errors.push('Password must contain at least one number');
+  }
+
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    errors.push('Password must contain at least one special character');
+  }
+
+  // Check for common weak passwords
+  const commonPasswords = ['password', '123456', 'qwerty', 'abc123', 'password123'];
+  if (commonPasswords.includes(password.toLowerCase())) {
+    errors.push('Password is too common');
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
 };
 
 // DB Model validations
@@ -160,6 +256,28 @@ export const validateApiKeyData = (req: Request, res: Response, next: NextFuncti
     return res.status(400).json({
       error: 'expires_at must be a valid date',
       code: 'INVALID_EXPIRATION_DATE'
+    });
+  }
+
+  next();
+};
+
+export const validatePassword = (req: Request, res: Response, next: NextFunction) => {
+  const { password } = req.body;
+
+  if (!password || typeof password !== 'string') {
+    return res.status(400).json({
+      error: 'Password is required',
+      code: 'MISSING_PASSWORD'
+    });
+  }
+
+  const validation = validatePasswordStrength(password);
+  if (!validation.isValid) {
+    return res.status(400).json({
+      error: 'Password does not meet security requirements',
+      code: 'WEAK_PASSWORD',
+      details: validation.errors
     });
   }
 
