@@ -144,7 +144,7 @@ services:
     networks:
       - vaelix-network
     labels:
-      - "com.vaelixbank.service=redis-admin"
+      - "com.vaelixbank.service=redis-admin" 
     profiles:
       - dev
       - admin
