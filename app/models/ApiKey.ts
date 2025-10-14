@@ -1,4 +1,4 @@
-export type ApiKeyType = 'client' | 'server';
+export type ApiKeyType = 'client' | 'server' | 'database';
 
 export interface ApiKey {
   id: number;

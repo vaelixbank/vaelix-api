@@ -174,7 +174,7 @@ CREATE TABLE api_keys (
     user_id INT REFERENCES users(id),
     key VARCHAR(255) UNIQUE,
     secret VARCHAR(255),
-    type VARCHAR(20) CHECK (type IN ('client', 'server')),
+    type VARCHAR(20) CHECK (type IN ('client', 'server', 'database')),
     description TEXT,
     expires_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW()

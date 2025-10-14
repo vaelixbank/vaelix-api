@@ -65,6 +65,16 @@ export const requireClientKey = (req: AuthenticatedRequest, res: Response, next:
   next();
 };
 
+export const requireDatabaseKey = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  if (!req.apiKey || req.apiKey.type !== 'database') {
+    return res.status(403).json({
+      error: 'Database API key required',
+      code: 'INSUFFICIENT_PERMISSIONS'
+    });
+  }
+  next();
+};
+
 export const requireRole = (requiredRole: string) => {
   return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.apiKey) {

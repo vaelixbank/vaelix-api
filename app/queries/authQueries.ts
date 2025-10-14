@@ -1,6 +1,6 @@
 import pool from '../utils/database';
 import crypto from 'crypto';
-import bcrypt from 'bcrypt';
+import { encrypt, decrypt } from '../utils/crypto';
 
 export class AuthQueries {
   // Insert auth factor
@@ -53,10 +53,10 @@ export class AuthQueries {
 
   // Insert API key
   static async createApiKey(user_id: number, key: string, secret: string, type: string = 'client', name?: string, description?: string, expires_at?: Date) {
-    const hashedSecret = await bcrypt.hash(secret, 12);
+    const encryptedSecret = encrypt(secret);
     const result = await pool.query(
       'INSERT INTO api_keys (user_id, key, secret, type, name, description, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING id, user_id, key, type, name, description, expires_at, created_at',
-      [user_id, key, hashedSecret, type, name, description, expires_at]
+      [user_id, key, encryptedSecret, type, name, description, expires_at]
     );
     return result.rows[0];
   }
@@ -68,8 +68,17 @@ export class AuthQueries {
       [key]
     );
     const apiKey = result.rows[0];
-    if (apiKey && await bcrypt.compare(secret, apiKey.secret)) {
-      return apiKey;
+    if (apiKey) {
+      try {
+        const decryptedSecret = decrypt(apiKey.secret);
+        if (decryptedSecret === secret) {
+          return apiKey;
+        }
+      } catch (error) {
+        // Invalid encrypted data or wrong key
+        console.error('Error decrypting API key secret:', error);
+        return null;
+      }
     }
     return null;
   }

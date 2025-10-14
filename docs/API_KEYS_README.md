@@ -2,22 +2,46 @@
 
 ## Overview
 
-The Vaelix Bank API implements a dual-key authentication system with two types of API keys:
+The Vaelix Bank API implements a three-tier authentication system with three types of API keys:
 
 - **Client Keys**: For client applications and end-user integrations
 - **Server Keys**: For server-to-server communications and administrative operations
+- **Database Keys**: For direct database access and data operations
 
 ## API Key Structure
 
 Each API key consists of:
 - `key`: Public identifier (vb_ + 48-character hex string, total 51 characters)
 - `secret`: Private secret (64-character hex string) - returned only on creation
-- `type`: Either 'client' or 'server'
+- `type`: Either 'client', 'server', or 'database'
 - `name`: Optional alias/name for the key (max 50 characters)
 - `user_id`: Associated user ID
 - `description`: Optional description
 - `expires_at`: Optional expiration date
 - `created_at`: Creation timestamp
+
+## Encryption
+
+API key secrets are encrypted using AES256-GCM encryption before storage in the database. The encryption key is stored securely as an environment variable (`ENCRYPTION_KEY`) and is never stored in the database itself.
+
+### Environment Setup
+
+Add the following to your `.env` file:
+
+```bash
+# 64-character hexadecimal string (32 bytes)
+ENCRYPTION_KEY=c6494d72aeea79c0f50ec82e06f427d239d5d04d7629b15770e08cb8b98a9221
+```
+
+### Migration from Hashed to Encrypted Secrets
+
+If upgrading from a previous version that used bcrypt hashing, run the migration script:
+
+```bash
+node migrate_encrypt_api_keys.js
+```
+
+**WARNING**: This migration will invalidate all existing API key secrets. Users will need to generate new keys after the migration.
 
 ## Authentication
 
@@ -57,15 +81,15 @@ api_secret: your_api_secret_here
 #### Create API Key
 - **POST** `/api/keys`
 - **Body**:
-  ```json
-  {
-    "user_id": 123,
-    "type": "client" | "server",
-    "name": "my-app-key", // Optional alias
-    "description": "Optional description",
-    "expires_at": "2024-12-31T23:59:59Z" // Optional
-  }
-  ```
+   ```json
+   {
+     "user_id": 123,
+     "type": "client" | "server" | "database",
+     "name": "my-app-key", // Optional alias
+     "description": "Optional description",
+     "expires_at": "2024-12-31T23:59:59Z" // Optional
+   }
+   ```
 - **Response**: Created key with secret (secret returned only once)
 - Requires server key authentication
 
@@ -102,6 +126,22 @@ curl -X POST https://api.vaelixbank.com/api/keys \
   }'
 ```
 
+### Creating a Database API Key
+
+```bash
+curl -X POST https://api.vaelixbank.com/api/keys \
+  -H "x-api-key: vb_1234567890abcdef..." \
+  -H "x-api-secret: server_secret_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": 123,
+    "type": "database",
+    "name": "data-warehouse-key",
+    "description": "Key for database access and data operations",
+    "expires_at": "2024-12-31T23:59:59Z"
+  }'
+```
+
 ### Using API Key for Authentication
 
 ```bash
@@ -115,9 +155,11 @@ curl -X GET https://api.vaelixbank.com/api/accounts/db \
 - **Never expose API secrets** in client-side code or logs
 - **Rotate keys regularly** for security
 - **Use server keys only for server-to-server** communications
+- **Use database keys only for direct database access** and data operations
 - **Set expiration dates** for temporary access
-- API secrets are hashed and stored securely in the database
+- API secrets are encrypted with AES256-GCM and stored securely in the database
 - Failed authentication attempts are logged for security monitoring
+- The encryption key is stored as an environment variable and never in the database
 
 ## Database Migration
 
@@ -128,6 +170,11 @@ To add the required fields to existing installations, run the migration script:
 ALTER TABLE api_keys
 ADD COLUMN type VARCHAR(10) NOT NULL DEFAULT 'client' CHECK (type IN ('client', 'server')),
 ADD COLUMN expires_at TIMESTAMP;
+
+-- To add 'database' type support, run data/migration_add_database_key_type.sql
+ALTER TABLE api_keys DROP CONSTRAINT IF EXISTS api_keys_type_check;
+ALTER TABLE api_keys ADD CONSTRAINT api_keys_type_check
+CHECK (type IN ('client', 'server', 'database'));
 ```
 
 ## Integration with Existing Routes
@@ -145,4 +192,7 @@ router.use(requireServerKey);
 
 // Require specifically client key
 router.use(requireClientKey);
+
+// Require specifically database key
+router.use(requireDatabaseKey);
 ```
