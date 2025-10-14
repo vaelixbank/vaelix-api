@@ -41,12 +41,4 @@ module.exports = {
     'no-implied-eval': 'error',
     'no-new-func': 'error',
   },
-  ignorePatterns: [
-    'dist/',
-    'node_modules/',
-    'coverage/',
-    '*.js',
-    '!jest.config.js',
-    '!jest.setup.js',
-  ],
 };

@@ -1,5 +1,5 @@
 -- =========================================
--- PostgreSQL Schema Vaelix Bank API - 73 tables
+-- PostgreSQL Schema Vaelix Bank API - 76 tables
 -- =========================================
 -- Complete database schema for Vaelix Bank API
 -- Includes core banking, Open Banking (Berlin Group), BaaS, and Weavr integration
@@ -125,13 +125,21 @@ CREATE TABLE card_provisioning (
 
 -- 7. Transactions
 CREATE TABLE transactions (
-    id SERIAL PRIMARY KEY,
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
     account_id INT REFERENCES accounts(id),
+    customer_id VARCHAR(36), -- For BaaS transactions
+    merchant_id INT REFERENCES merchants(id), -- Reference to merchants table
     amount NUMERIC(30,2) NOT NULL,
     currency CHAR(3) DEFAULT 'EUR',
     type VARCHAR(50),
     status VARCHAR(20) DEFAULT 'pending',
     description TEXT,
+    category VARCHAR(50),
+    merchant_data JSONB, -- Additional merchant information
+    reference VARCHAR(255), -- Transaction reference
+    metadata JSONB, -- Additional transaction metadata
+    processed_at TIMESTAMP, -- When transaction was processed
+    weavr_transaction_id VARCHAR(100), -- Weavr integration
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -139,7 +147,7 @@ CREATE TABLE transactions (
 -- 8. Transaction Audit
 CREATE TABLE transaction_audit (
     id SERIAL PRIMARY KEY,
-    transaction_id INT REFERENCES transactions(id),
+    transaction_id VARCHAR(36) REFERENCES transactions(id),
     action VARCHAR(50),
     performed_by INT REFERENCES users(id),
     timestamp TIMESTAMP DEFAULT NOW()
@@ -188,7 +196,7 @@ CREATE TABLE api_keys (
 -- 13. Approvals
 CREATE TABLE approvals (
     id SERIAL PRIMARY KEY,
-    transaction_id INT REFERENCES transactions(id),
+    transaction_id VARCHAR(36) REFERENCES transactions(id),
     approver_id INT REFERENCES users(id),
     approved BOOLEAN DEFAULT FALSE,
     approved_at TIMESTAMP
@@ -235,7 +243,7 @@ CREATE TABLE card_transactions (
 -- 18. Fraud Detection
 CREATE TABLE fraud_detection (
     id SERIAL PRIMARY KEY,
-    transaction_id INT REFERENCES transactions(id),
+    transaction_id VARCHAR(36) REFERENCES transactions(id),
     risk_level VARCHAR(50),
     flagged_at TIMESTAMP DEFAULT NOW()
 );
@@ -390,10 +398,16 @@ CREATE TABLE security_incidents (
 
 -- 35. Sessions
 CREATE TABLE sessions (
-    id SERIAL PRIMARY KEY,
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
     user_id INT REFERENCES users(id),
     session_token VARCHAR(255),
-    expires_at TIMESTAMP,
+    device_id VARCHAR(255), -- For mobile auth
+    access_token VARCHAR(500), -- JWT access token
+    refresh_token VARCHAR(500), -- JWT refresh token
+    expires_at TIMESTAMP, -- Access token expiry
+    refresh_expires_at TIMESTAMP, -- Refresh token expiry
+    is_active BOOLEAN DEFAULT TRUE, -- Session active status
+    last_activity TIMESTAMP DEFAULT NOW(), -- Last activity timestamp
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -429,7 +443,7 @@ CREATE TABLE wealth_portfolios (
 CREATE TABLE aml_flags (
     id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(id),
-    transaction_id INT REFERENCES transactions(id),
+    transaction_id VARCHAR(36) REFERENCES transactions(id),
     reason VARCHAR(255),
     flagged_at TIMESTAMP DEFAULT NOW()
 );
@@ -571,7 +585,7 @@ CREATE TABLE balance_history (
     blocked_new NUMERIC(30,2),
     change_amount NUMERIC(30,2),
     change_type VARCHAR(50), -- 'credit', 'debit', 'block', 'unblock', 'reserve', 'release'
-    transaction_id INT REFERENCES transactions(id),
+    transaction_id VARCHAR(36) REFERENCES transactions(id),
     weavr_transaction_id VARCHAR(100),
     description TEXT,
     created_at TIMESTAMP DEFAULT NOW()
@@ -1032,10 +1046,53 @@ CREATE TABLE security_events (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- =========================================
+-- Additional Tables for Query Compatibility
+-- =========================================
+
+-- 74. Merchants
+CREATE TABLE merchants (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    merchant_id VARCHAR(100) UNIQUE,
+    category VARCHAR(100),
+    country VARCHAR(3),
+    status VARCHAR(20) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- =========================================
+-- Additional Authentication Tables
+-- =========================================
+
+-- 75. Verification Codes (for email/SMS verification)
+CREATE TABLE verification_codes (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    code VARCHAR(10) NOT NULL,
+    type VARCHAR(10) CHECK (type IN ('email', 'sms')),
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(user_id, type)
+);
+
+-- 75. Password Reset Tokens
+CREATE TABLE password_reset_tokens (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    token VARCHAR(255) NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Indexes for performance
 CREATE INDEX idx_accounts_weavr_id ON accounts(weavr_id);
 CREATE INDEX idx_accounts_user_id ON accounts(user_id);
 CREATE INDEX idx_accounts_status ON accounts(status);
+CREATE INDEX idx_merchants_merchant_id ON merchants(merchant_id);
+CREATE INDEX idx_merchants_category ON merchants(category);
+CREATE INDEX idx_merchants_status ON merchants(status);
 CREATE INDEX idx_consumers_weavr_id ON consumers(weavr_id);
 CREATE INDEX idx_consumers_user_id ON consumers(user_id);
 CREATE INDEX idx_corporates_weavr_id ON corporates(weavr_id);
@@ -1126,7 +1183,21 @@ CREATE INDEX idx_security_events_type ON security_events(event_type);
 CREATE INDEX idx_security_events_severity ON security_events(severity);
 CREATE INDEX idx_security_events_user ON security_events(user_id);
 CREATE INDEX idx_security_events_created_at ON security_events(created_at);
+CREATE INDEX idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX idx_sessions_device_id ON sessions(device_id);
+CREATE INDEX idx_sessions_is_active ON sessions(is_active);
+CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX idx_sessions_refresh_expires_at ON sessions(refresh_expires_at);
 CREATE INDEX idx_baas_transactions_customer_id ON baas_transactions(customer_id);
 CREATE INDEX idx_baas_transactions_type ON baas_transactions(type);
 CREATE INDEX idx_baas_transactions_status ON baas_transactions(status);
 CREATE INDEX idx_baas_transactions_created_at ON baas_transactions(created_at);
+
+-- Updated transactions table indexes
+CREATE INDEX idx_transactions_account_id ON transactions(account_id);
+CREATE INDEX idx_transactions_customer_id ON transactions(customer_id);
+CREATE INDEX idx_transactions_merchant_id ON transactions(merchant_id);
+CREATE INDEX idx_transactions_type ON transactions(type);
+CREATE INDEX idx_transactions_status ON transactions(status);
+CREATE INDEX idx_transactions_created_at ON transactions(created_at);
+CREATE INDEX idx_transactions_weavr_transaction_id ON transactions(weavr_transaction_id);
