@@ -1,0 +1,310 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # Vaelix Bank API - Production Environment
+  # ============================================
+  api:
+    image: ghcr.io/vaelixbank/vaelix-api:latest
+    container_name: vaelix-api-prod
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=vaelix_prod
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - WEAVR_API_BASE_URL=${WEAVR_API_BASE_URL}
+      - WEAVR_API_KEY=${WEAVR_API_KEY}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+    env_file:
+      - .env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - vaelix-prod-network
+    volumes:
+      - ./logs:/app/logs:rw
+      - ./backups:/app/backups:rw
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vaelix-api.rule=Host(`api.vaelixbank.com`)"
+      - "traefik.http.routers.vaelix-api.entrypoints=websecure"
+      - "traefik.http.routers.vaelix-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vaelix-api.loadbalancer.server.port=3000"
+      - "traefik.http.middlewares.rate-limit.ratelimit.burst=100"
+      - "traefik.http.middlewares.rate-limit.ratelimit.average=50"
+      - "com.vaelixbank.service=api"
+      - "com.vaelixbank.version=1.0.0"
+      - "com.vaelixbank.environment=production"
+
+  # ============================================
+  # PostgreSQL Database - Production
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: vaelix-postgres-prod
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=vaelix_prod
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./data/schema-pgsql.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./data/queries.sql:/docker-entrypoint-initdb.d/02-queries.sql:ro
+      - ./backups:/backups:rw
+    networks:
+      - vaelix-prod-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d vaelix_prod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+    labels:
+      - "com.vaelixbank.service=database"
+      - "com.vaelixbank.environment=production"
+
+  # ============================================
+  # Redis Cache & Session Store - Production
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: vaelix-redis-prod
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --tcp-keepalive 300
+      --timeout 300
+    volumes:
+      - redis_prod_data:/data
+    networks:
+      - vaelix-prod-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "com.vaelixbank.service=cache"
+      - "com.vaelixbank.environment=production"
+
+  # ============================================
+  # Traefik Reverse Proxy - Production
+  # ============================================
+  traefik:
+    image: traefik:v2.10
+    container_name: vaelix-traefik-prod
+    restart: unless-stopped
+    command:
+      - "--api.dashboard=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.constraints=Label(`com.vaelixbank.environment`,`production`)"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${TRAEFIK_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--log.level=INFO"
+      - "--accesslog=true"
+      - "--accesslog.filepath=/logs/traefik.log"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_prod_letsencrypt:/letsencrypt
+      - ./logs/traefik:/logs:rw
+    networks:
+      - vaelix-prod-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    labels:
+      - "com.vaelixbank.service=proxy"
+      - "com.vaelixbank.environment=production"
+
+  # ============================================
+  # Monitoring Stack (Optional)
+  # ============================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: vaelix-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_prod_data:/prometheus
+    networks:
+      - vaelix-prod-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    labels:
+      - "com.vaelixbank.service=monitoring"
+      - "com.vaelixbank.environment=production"
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: vaelix-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana_prod_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - vaelix-prod-network
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    labels:
+      - "com.vaelixbank.service=dashboard"
+      - "com.vaelixbank.environment=production"
+    profiles:
+      - monitoring
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  vaelix-prod-network:
+    driver: bridge
+    name: vaelix-prod-network
+    driver_opts:
+      com.docker.network.bridge.name: vaelix-prod-bridge
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  postgres_prod_data:
+    name: vaelix-postgres-prod-data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/postgres
+  redis_prod_data:
+    name: vaelix-redis-prod-data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis
+  traefik_prod_letsencrypt:
+    name: vaelix-traefik-prod-letsencrypt
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/traefik/letsencrypt
+  prometheus_prod_data:
+    name: vaelix-prometheus-prod-data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/prometheus
+  grafana_prod_data:
+    name: vaelix-grafana-prod-data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/grafana

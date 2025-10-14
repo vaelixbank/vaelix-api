@@ -1,0 +1,132 @@
+version: '3.8'
+
+# ============================================
+# Vaelix Bank API - Docker Compose Override
+# ============================================
+# Local development overrides for docker-compose.yml
+# This file is automatically merged with docker-compose.yml
+# ============================================
+
+services:
+  api:
+    # Mount source code for development
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./logs:/app/logs
+    # Override command for development
+    command: pnpm run dev
+    # Enable debugging
+    ports:
+      - "3000:3000"
+      - "9229:9229"  # Node.js debugger
+    environment:
+      - NODE_ENV=development
+      - DEBUG=vaelix-api:*
+    # Override healthcheck for development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  postgres:
+    # Expose port for local database access
+    ports:
+      - "5432:5432"
+    # Add development-specific environment
+    environment:
+      - POSTGRES_DB=vaelix_dev
+      - POSTGRES_USER=vaelix_user
+      - POSTGRES_PASSWORD=dev_password
+
+  redis:
+    # Expose port for local Redis access
+    ports:
+      - "6379:6379"
+    # Remove password for development
+    command: redis-server --appendonly yes
+
+  # ============================================
+  # Development-only services
+  # ============================================
+
+  # MailHog for email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: vaelix-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web interface
+    networks:
+      - vaelix-network
+    labels:
+      - "com.vaelixbank.service=email"
+      - "com.vaelixbank.env=development"
+
+  # Elasticsearch for advanced search (optional)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: vaelix-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - vaelix-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "com.vaelixbank.service=search"
+      - "com.vaelixbank.env=development"
+    profiles:
+      - search
+
+  # Kibana for Elasticsearch (optional)
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: vaelix-kibana
+    restart: unless-stopped
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    networks:
+      - vaelix-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "com.vaelixbank.service=kibana"
+      - "com.vaelixbank.env=development"
+    profiles:
+      - search
+
+# ============================================
+# Additional volumes for development
+# ============================================
+volumes:
+  elasticsearch_data:
+    name: vaelix-elasticsearch-dev-data
+    driver: local

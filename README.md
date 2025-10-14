@@ -172,6 +172,7 @@ curl -X GET http://localhost:3000/api/accounts/123/iban \
 - **[Complete API Reference](docs/API.md)** - All endpoints with examples
 - **[Models Documentation](docs/Models.md)** - Data structures and schemas
 - **[Controllers Guide](docs/Controllers.md)** - Implementation details
+- **[Docker Setup Guide](docs/DOCKER_README.md)** - Complete Docker documentation
 - **[Changelog](CHANGELOG.md)** - Version history and release notes
 
 ### 🔧 Technical Documentation
@@ -363,13 +364,23 @@ SMTP_PASS=your_smtp_password
 ### Docker Deployment
 
 ```bash
-# Build and run with Docker
-docker build -t vaelix-api .
-docker run -p 3000:3000 --env-file .env vaelix-api
+# Quick development setup
+make dev
 
-# Or use Docker Compose
-docker-compose up -d
+# Production deployment
+make prod
+
+# With monitoring stack
+make monitoring
 ```
+
+#### Available Environments
+
+- **Development**: `docker-compose.dev.yml` - Hot reload, debugging, dev tools
+- **Production**: `docker-compose.prod.yml` - Optimized, secure, scalable
+- **Override**: `docker-compose.override.yml` - Local customizations
+
+See **[Docker Documentation](docs/DOCKER_README.md)** for complete setup instructions.
 
 ### Cloud Deployment
 

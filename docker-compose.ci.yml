@@ -1,0 +1,87 @@
+version: '3.8'
+
+# ============================================
+# Vaelix Bank API - CI/CD Test Environment
+# ============================================
+# Lightweight environment for automated testing
+# ============================================
+
+services:
+  # ============================================
+  # Test Database
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: vaelix-postgres-ci
+    environment:
+      - POSTGRES_DB=vaelix_test
+      - POSTGRES_USER=vaelix_user
+      - POSTGRES_PASSWORD=test_password
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts
+    volumes:
+      - ./data/schema-pgsql.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./data/queries.sql:/docker-entrypoint-initdb.d/02-queries.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vaelix_user -d vaelix_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+
+  # ============================================
+  # Test Cache
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: vaelix-redis-ci
+    command: redis-server --appendonly no --save ""
+    ports:
+      - "6380:6379"  # Different port to avoid conflicts
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    tmpfs:
+      - /data
+
+  # ============================================
+  # Test API (Optional - for integration tests)
+  # ============================================
+  api:
+    image: vaelix-api:test
+    container_name: vaelix-api-ci
+    environment:
+      - NODE_ENV=test
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=vaelix_test
+      - DB_USER=vaelix_user
+      - DB_PASSWORD=test_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ENCRYPTION_KEY=c6494d72aeea79c0f50ec82e06f427d239d5d04d7629b15770e08cb8b98a9221
+      - JWT_SECRET=test-jwt-secret
+      - JWT_REFRESH_SECRET=test-refresh-secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3001:3000"  # Different port for CI
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    profiles:
+      - integration
+
+networks:
+  default:
+    name: vaelix-ci-network

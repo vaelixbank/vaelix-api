@@ -1,0 +1,170 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # Vaelix Bank API - Development Environment
+  # ============================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: development
+    container_name: vaelix-api-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "9229:9229"  # Debug port
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=vaelix_dev
+      - DB_USER=vaelix_user
+      - DB_PASSWORD=dev_password
+      - ENCRYPTION_KEY=c6494d72aeea79c0f50ec82e06f427d239d5d04d7629b15770e08cb8b98a9221
+      - JWT_SECRET=dev-jwt-secret-for-development-only
+      - JWT_REFRESH_SECRET=dev-refresh-secret-for-development-only
+      - WEAVR_API_BASE_URL=https://sandbox.weavr.io
+      - WEAVR_API_KEY=${WEAVR_API_KEY}
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - vaelix-dev-network
+    command: pnpm run dev
+    labels:
+      - "com.vaelixbank.service=api"
+      - "com.vaelixbank.env=development"
+
+  # ============================================
+  # PostgreSQL Database - Development
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: vaelix-postgres-dev
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=vaelix_dev
+      - POSTGRES_USER=vaelix_user
+      - POSTGRES_PASSWORD=dev_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./data/schema-pgsql.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./data/queries.sql:/docker-entrypoint-initdb.d/02-queries.sql
+    networks:
+      - vaelix-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vaelix_user -d vaelix_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "com.vaelixbank.service=database"
+      - "com.vaelixbank.env=development"
+
+  # ============================================
+  # Redis Cache - Development
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: vaelix-redis-dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - vaelix-dev-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "com.vaelixbank.service=cache"
+      - "com.vaelixbank.env=development"
+
+  # ============================================
+  # pgAdmin - Development Database Management
+  # ============================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: vaelix-pgadmin-dev
+    restart: unless-stopped
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=dev@vaelixbank.com
+      - PGADMIN_DEFAULT_PASSWORD=dev123
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    ports:
+      - "8080:80"
+    depends_on:
+      - postgres
+    networks:
+      - vaelix-dev-network
+    volumes:
+      - pgadmin_dev_data:/var/lib/pgadmin
+    labels:
+      - "com.vaelixbank.service=admin"
+      - "com.vaelixbank.env=development"
+
+  # ============================================
+  # Redis Commander - Development Redis Management
+  # ============================================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: vaelix-redis-commander-dev
+    restart: unless-stopped
+    environment:
+      - REDIS_HOSTS=local:redis:6379:0
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - vaelix-dev-network
+    labels:
+      - "com.vaelixbank.service=redis-admin"
+      - "com.vaelixbank.env=development"
+
+  # ============================================
+  # MailHog - Email Testing (Development)
+  # ============================================
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: vaelix-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web interface
+    networks:
+      - vaelix-dev-network
+    labels:
+      - "com.vaelixbank.service=email"
+      - "com.vaelixbank.env=development"
+
+networks:
+  vaelix-dev-network:
+    driver: bridge
+    name: vaelix-dev-network
+
+volumes:
+  postgres_dev_data:
+    name: vaelix-postgres-dev-data
+    driver: local
+  redis_dev_data:
+    name: vaelix-redis-dev-data
+    driver: local
+  pgadmin_dev_data:
+    name: vaelix-pgadmin-dev-data
+    driver: local

@@ -1,9 +1,206 @@
 version: '3.8'
 
 services:
+  # ============================================
+  # Vaelix Bank API - Main Application
+  # ============================================
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: vaelix-api
+    restart: unless-stopped
     ports:
       - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=vaelix_prod
+      - DB_USER=vaelix_user
+      - DB_PASSWORD=${DB_PASSWORD:-changeme123}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-c6494d72aeea79c0f50ec82e06f427d239d5d04d7629b15770e08cb8b98a9221}
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-your-super-secret-refresh-key-change-in-production}
+      - WEAVR_API_BASE_URL=${WEAVR_API_BASE_URL:-https://api.weavr.io}
+      - WEAVR_API_KEY=${WEAVR_API_KEY}
     env_file:
       - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - vaelix-network
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vaelix-api.rule=Host(`api.vaelixbank.com`)"
+      - "traefik.http.routers.vaelix-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vaelix-api.loadbalancer.server.port=3000"
+      - "com.vaelixbank.service=api"
+      - "com.vaelixbank.version=1.0.0"
+
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: vaelix-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=vaelix_prod
+      - POSTGRES_USER=vaelix_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme123}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./data/schema-pgsql.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./data/queries.sql:/docker-entrypoint-initdb.d/02-queries.sql
+    networks:
+      - vaelix-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vaelix_user -d vaelix_prod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "com.vaelixbank.service=database"
+
+  # ============================================
+  # Redis Cache & Session Store
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: vaelix-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme456}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - vaelix-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "com.vaelixbank.service=cache"
+
+  # ============================================
+  # pgAdmin - Database Management (Development)
+  # ============================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: vaelix-pgadmin
+    restart: unless-stopped
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@vaelixbank.com
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin123}
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    ports:
+      - "8080:80"
+    depends_on:
+      - postgres
+    networks:
+      - vaelix-network
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    labels:
+      - "com.vaelixbank.service=admin"
+      - "traefik.enable=true"
+      - "traefik.http.routers.pgadmin.rule=Host(`pgadmin.vaelixbank.local`)"
+    profiles:
+      - dev
+      - admin
+
+  # ============================================
+  # Redis Commander - Redis Management (Development)
+  # ============================================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: vaelix-redis-commander
+    restart: unless-stopped
+    environment:
+      - REDIS_HOSTS=local:redis:6379:0:${REDIS_PASSWORD:-changeme456}
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - vaelix-network
+    labels:
+      - "com.vaelixbank.service=redis-admin"
+    profiles:
+      - dev
+      - admin
+
+  # ============================================
+  # Traefik Reverse Proxy (Production)
+  # ============================================
+  traefik:
+    image: traefik:v2.10
+    container_name: vaelix-traefik
+    restart: unless-stopped
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=admin@vaelixbank.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8082:8080"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    networks:
+      - vaelix-network
+    labels:
+      - "com.vaelixbank.service=proxy"
+    profiles:
+      - prod
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  vaelix-network:
+    driver: bridge
+    name: vaelix-network
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  postgres_data:
+    name: vaelix-postgres-data
+    driver: local
+  redis_data:
+    name: vaelix-redis-data
+    driver: local
+  pgadmin_data:
+    name: vaelix-pgadmin-data
+    driver: local
+  traefik_letsencrypt:
+    name: vaelix-traefik-letsencrypt
+    driver: local

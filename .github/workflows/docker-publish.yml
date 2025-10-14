@@ -1,0 +1,143 @@
+name: Publish Docker Image
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Docker image tag'
+        required: true
+        default: 'latest'
+
+env:
+  REGISTRY_GHCR: ghcr.io
+  REGISTRY_DOCKERHUB: docker.io
+  IMAGE_NAME: vaelixbank/vaelix-api
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY_GHCR }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ vars.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          ${{ env.REGISTRY_GHCR }}/${{ github.repository }}
+          ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
+
+    - name: Build and push Docker image
+      run: |
+        # Build and test image first
+        ./scripts/docker-build.sh --test
+
+        # Then build and push multi-platform
+        ./scripts/docker-build.sh --multi --push-ghcr --push-dockerhub
+
+    - name: Generate artifact attestation
+      uses: actions/attest-build-provenance@v1
+      with:
+        subject-name: ${{ env.REGISTRY_GHCR }}/${{ github.repository}}
+        subject-digest: ${{ steps.push.outputs.digest }}
+        push-to-registry: true
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'image'
+        scan-ref: '${{ env.REGISTRY_GHCR }}/${{ github.repository }}:latest'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    - name: Create GitHub Release
+      if: github.event_name == 'release'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        body: |
+          ## Docker Images
+
+          ### GitHub Container Registry
+          ```bash
+          docker pull ${{ env.REGISTRY_GHCR }}/${{ github.repository }}:latest
+          ```
+
+          ### Docker Hub
+          ```bash
+          docker pull ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}:latest
+          ```
+
+          ## What's Changed
+
+          See the [changelog](CHANGELOG.md) for details.
+
+          ## Security
+
+          - Image scanned for vulnerabilities
+          - SBOM (Software Bill of Materials) generated
+          - Build provenance attested
+
+    - name: Notify on Discord
+      if: github.event_name == 'release'
+      uses: Ilshidur/action-discord@master
+      env:
+        DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+      with:
+        args: |
+          🚀 **New Vaelix Bank API Release: ${{ github.event.release.tag_name }}**
+
+          📦 **Docker Images Available:**
+          - GHCR: `${{ env.REGISTRY_GHCR }}/${{ github.repository }}:latest`
+          - Docker Hub: `${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}:latest`
+
+          🔒 **Security Features:**
+          - AES256 encryption
+          - Vulnerability scanning
+          - SBOM generation
+
+          📖 [Release Notes](${{ github.event.release.html_url }})
