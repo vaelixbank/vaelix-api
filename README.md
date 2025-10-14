@@ -1,371 +1,327 @@
 # Vaelix Bank API
 
-A banking API built on top of Weavr's Multi API, providing managed accounts and cards functionality.
+[![CI/CD](https://github.com/vaelixbank/vaelix-api/actions/workflows/ci.yml/badge.svg)](https://github.com/vaelixbank/vaelix-api/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13+-blue)](https://www.postgresql.org/)
+[![Open Banking](https://img.shields.io/badge/Open%20Banking-Ready-green)](https://www.openbanking.org.uk/)
+[![Security](https://img.shields.io/badge/Security-AES256%20Encrypted-red)](SECURITY.md)
+[![codecov](https://codecov.io/gh/vaelixbank/vaelix-api/branch/main/graph/badge.svg)](https://codecov.io/gh/vaelixbank/vaelix-api)
 
-## Architecture Overview
+> A production-ready, open-source banking API built on top of Weavr's Multi API, providing managed accounts and cards functionality with enterprise-grade security.
 
-Vaelix Bank uses **Weavr as a regulated intermediary** between our proprietary infrastructure and the public market:
+## 📋 Table of Contents
 
+- [🚀 Features](#-features)
+- [🏗️ Architecture](#️-architecture)
+- [📦 Installation](#-installation)
+- [⚡ Quick Start](#-quick-start)
+- [📚 Documentation](#-documentation)
+- [🔧 API Endpoints](#-api-endpoints)
+- [🔐 Security](#-security)
+- [🤝 Contributing](#-contributing)
+- [📄 License](#-license)
+- [🙏 Acknowledgments](#-acknowledgments)
+
+## 🚀 Features
+
+### Core Banking Features
+- ✅ **User Management**: Corporate & Consumer identity management with KYC/KYB
+- ✅ **Authentication**: Strong Customer Authentication (SCA) with OTP & Push Notifications
+- ✅ **Account Management**: Managed accounts with virtual IBAN assignment
+- ✅ **Card Services**: Virtual & physical card management with CVC retrieval
+- ✅ **Transaction Processing**: Sends, transfers, and wire transfers
+- ✅ **Beneficiary Management**: Secure beneficiary management with SCA
+- ✅ **Bulk Operations**: Enterprise-grade bulk processing capabilities
+
+### Security & Compliance
+- 🔒 **AES256-GCM Encryption**: Sensitive data encrypted at rest
+- 🛡️ **Rate Limiting**: Multi-tier rate limiting for different endpoints
+- 🚫 **Brute Force Protection**: Progressive delays and account locking
+- 📊 **Audit Trails**: Complete transaction history and compliance logs
+- 🔍 **Regulatory Compliance**: PSD2/Open Banking compliant architecture
+- 🔐 **API Key Management**: Encrypted API keys with multiple types
+
+### Developer Experience
+- 📖 **OpenAPI Documentation**: Comprehensive API documentation
+- 🧪 **TypeScript**: Full type safety and IntelliSense support
+- 🐳 **Docker Support**: Containerized deployment ready
+- 📊 **Monitoring**: Built-in health checks and metrics
+- 🔄 **Webhook Integration**: Real-time event notifications
+- 🤖 **CI/CD Pipeline**: Automated testing and deployment
+- 🎯 **Code Quality**: ESLint, Prettier, and Husky pre-commit hooks
+- 📈 **Test Coverage**: Jest with coverage reporting
+
+## 🏗️ Architecture
+
+Vaelix Bank uses a **"Ledger First"** architecture where the local ledger is the single source of truth for all banking operations. Weavr acts as a regulated intermediary for compliance-required operations only.
+
+```mermaid
+graph TB
+    A[Vaelix Bank API] --> B[Local Ledger]
+    A --> C[Regulatory Gateway]
+    C --> D[Weavr Multi API]
+    B --> E[(PostgreSQL)]
+    A --> F[External Services]
+
+    style A fill:#e1f5fe
+    style B fill:#f3e5f5
+    style C fill:#e8f5e8
+    style D fill:#fff3e0
 ```
-┌─────────────────┐    ┌─────────────┐    ┌─────────────────┐
-│  Vaelix Bank    │    │   Weavr      │    │  Public Market  │
-│  (Proprietary)  │◄──►│ (Regulated   │◄──►│  (Banks, Cards, │
-│                 │    │  Intermediary│    │   Wire Transfers)│
-└─────────────────┘    └─────────────┘    └─────────────────┘
-```
 
-### Data Flow
-1. **Client Registration**: User data stored in Vaelix Bank database
-2. **Weavr Synchronization**: Account/card data synchronized with Weavr
-3. **Sensitive Data Retrieval**: IBAN, CVC, card details retrieved from Weavr
-4. **Public Market Access**: Clients can use their banking details in the public market
+### Key Principles
 
-## Features
+1. **Data Sovereignty**: All business data remains in your infrastructure
+2. **Regulatory Compliance**: Weavr provides licensed banking infrastructure
+3. **Security First**: AES256 encryption and comprehensive audit trails
+4. **Open Banking**: Berlin Group API standards compliant
 
-- User Authentication and Password Management
-- Strong Customer Authentication (SCA) with OTP and Push Notifications
-- Corporate and Consumer Identity Management with KYC/KYB
-- Authorised Users Management
-- Beneficiary Management
-- **IBAN Management**: Virtual IBAN assignment for wire transfer capabilities
-- Managed Accounts and Cards
-- Linked Accounts
-- Transaction Processing (Sends, Transfers, Wire Transfers)
-- Bulk Operations
-- Production-ready with error handling and logging
+## 📦 Installation
 
-## Sensitive Data Retrieval from Weavr
+### Prerequisites
 
-As a regulated intermediary, Weavr provides access to sensitive banking data (IBAN, CVC, card details) that clients can use in the public market.
+- **Node.js** >= 18.0.0
+- **PostgreSQL** >= 13
+- **npm** or **yarn** package manager
 
-### Data Retrieval Process
-
-1. **Client Onboarding**: Client registers in Vaelix Bank system
-2. **Weavr Identity Creation**: Client identity created in Weavr
-3. **Account/Card Creation**: Managed accounts and cards created in Weavr
-4. **Sensitive Data Assignment**: IBAN/CVC assigned by Weavr
-5. **Data Retrieval**: Sensitive data retrieved and stored locally
-6. **Client Access**: Client can use banking details in public market
-
-### IBAN Retrieval Example
+### Quick Setup
 
 ```bash
-# 1. Create local account
-curl -X POST http://localhost:3000/api/accounts/db \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: your-server-key" \
-  -d '{"user_id": 123, "account_type": "checking", "currency": "EUR"}'
+# Clone the repository
+git clone https://github.com/vaelixbank/vaelix-api.git
+cd vaelix-api
 
-# 2. Create Weavr managed account
-curl -X POST http://localhost:3000/api/accounts \
-  -H "api_key: your-weavr-key" \
-  -H "auth_token: your-auth-token" \
-  -d '{"profile_id": "profile_123", "friendlyName": "Main Account"}'
+# Install dependencies
+npm install
 
-# 3. Request IBAN assignment from Weavr
-curl -X POST http://localhost:3000/api/accounts/db/123/iban \
-  -H "x-api-key: your-weavr-key" \
-  -H "auth_token: your-auth-token"
+# Copy environment configuration
+cp .env.example .env
 
-# 4. Retrieve IBAN details from Weavr
-curl http://localhost:3000/api/accounts/db/123/iban \
-  -H "x-api-key: your-weavr-key" \
-  -H "auth_token: your-auth-token"
-```
+# Set up the database
+# (Configure your PostgreSQL connection in .env)
 
-**Response with sensitive data:**
-```json
-{
-  "account_id": 123,
-  "iban": "FR1234567890123456789012345",
-  "bic": "BNPAFRPP",
-  "state": "ALLOCATED",
-  "bank_details": {
-    "beneficiary_name": "John Doe",
-    "bank_name": "BNP Paribas",
-    "bank_address": "Paris, France"
-  }
-}
-```
+# Run database migrations
+npm run migrate
 
-### Card Data Retrieval (CVC, PAN, etc.)
-
-```bash
-# Create managed card in Weavr
-curl -X POST http://localhost:3000/api/cards \
-  -H "api_key: your-weavr-key" \
-  -H "auth_token: your-auth-token" \
-  -d '{
-    "profile_id": "profile_123",
-    "name": "Main Card",
-    "type": "virtual"
-  }'
-
-# Retrieve card details including CVC
-curl http://localhost:3000/api/cards/card_123 \
-  -H "api_key: your-weavr-key" \
-  -H "auth_token: your-auth-token"
-```
-
-**Response with sensitive card data:**
-```json
-{
-  "id": "card_123",
-  "masked_pan": "411111******1111",
-  "cvc": "123",
-  "expiry_date": "12/26",
-  "cardholder_name": "John Doe",
-  "state": "ACTIVE"
-}
-```
-
-### Data Storage Strategy
-
-Sensitive data retrieved from Weavr is stored locally for client access:
-
-```sql
--- IBAN data storage
-UPDATE accounts
-SET iban = 'FR1234567890123456789012345',
-    bic = 'BNPAFRPP',
-    weavr_id = 'weavr_account_123',
-    sync_status = 'synced',
-    last_weavr_sync = NOW()
-WHERE id = 123;
-
--- Card data storage
-UPDATE vibans_cards
-SET cvc = '123',
-    masked_pan = '411111******1111',
-    expiry_date = '12/26',
-    weavr_id = 'weavr_card_456',
-    sync_status = 'synced'
-WHERE id = 456;
-```
-
-### Security Considerations
-
-- **Encryption**: Sensitive data encrypted at rest using AES-256
-- **Access Control**: API keys required for data retrieval
-- **Audit Logging**: All data access logged for compliance
-- **Token Rotation**: Weavr auth tokens rotated regularly
-- **PCI Compliance**: Card data handling follows PCI DSS standards
-
-### Webhook Integration
-
-Weavr automatically notifies of data changes:
-
-```json
-{
-  "type": "managed_account.iban.allocated",
-  "data": {
-    "id": "weavr_account_123",
-    "iban": "FR1234567890123456789012345",
-    "bic": "BNPAFRPP",
-    "state": "ALLOCATED"
-  }
-}
-```
-
-For detailed API documentation, see [API.md](docs/API.md#iban-management).
-
-## Installation
-
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Copy environment variables:
-   ```bash
-   cp .env.example .env
-   ```
-
-4. Update `.env` with your Weavr API credentials
-
-## Development
-
-```bash
+# Start development server
 npm run dev
 ```
 
-## Production
+### Docker Setup
 
 ```bash
-npm run build
-npm start
+# Build and run with Docker Compose
+docker-compose up -d
+
+# Or use Podman
+docker-compose -f docker-compose-podman.yml up -d
 ```
 
-## API Endpoints
+## ⚡ Quick Start
 
-### Authentication
-- `POST /api/auth/login` - Login with password
-- `POST /api/auth/login/biometric` - Login via biometrics
-- `GET /api/auth/identities` - Get user identities
-- `POST /api/auth/logout` - Logout
-- `POST /api/auth/token` - Acquire a new access token
+### 1. Create an API Key
 
-### Passwords
-- `POST /api/passwords` - Create a password
-- `POST /api/passwords/update` - Update a password
-- `POST /api/passwords/validate` - Validate a password
-- `POST /api/passwords/lost` - Initiate lost password process
-- `POST /api/passwords/lost/resume` - Resume lost password process
+```bash
+curl -X POST http://localhost:3000/api/keys \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": 1,
+    "type": "server",
+    "name": "my-server-key"
+  }'
+```
 
-### Strong Customer Authentication (SCA)
-- `GET /api/sca/factors` - Get user authentication factors
-- `POST /api/sca/factors/otp/enrol` - Enrol OTP authentication (step 1)
-- `POST /api/sca/factors/otp/enrol/verify` - Verify OTP enrolment (step 2)
-- `POST /api/sca/factors/push/enrol` - Enrol push notification authentication
-- `DELETE /api/sca/factors/push/unlink` - Unlink push notification authentication
-- `POST /api/sca/challenges/stepup/otp` - Issue OTP for step-up authentication
-- `POST /api/sca/challenges/stepup/otp/verify` - Verify step-up OTP
-- `POST /api/sca/challenges/stepup/push` - Issue push notification for step-up
-- `POST /api/sca/challenges/confirmation/otp` - Issue OTP for resource confirmation
-- `POST /api/sca/challenges/confirmation/otp/verify` - Verify resource confirmation OTP
-- `POST /api/sca/challenges/confirmation/push` - Issue push notification for resource confirmation
+### 2. Create a Consumer
 
-### Corporates
-- `POST /api/corporates` - Create a corporate
-- `GET /api/corporates/:id` - Get a corporate
-- `PATCH /api/corporates/:id` - Update a corporate
-- `POST /api/corporates/:id/root_user/email/verification` - Send email verification code
-- `POST /api/corporates/:id/root_user/email/verify` - Verify email
-- `POST /api/corporates/:id/kyb/start` - Start KYB process
-- `GET /api/corporates/:id/kyb` - Get KYB status
-- `POST /api/corporates/:id/charge_fee` - Charge fee to corporate
+```bash
+curl -X POST http://localhost:3000/api/consumers \
+  -H "x-api-key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "root_user": {
+      "name": "John Doe",
+      "email": "john@example.com"
+    }
+  }'
+```
 
-### Consumers
-- `POST /api/consumers` - Create a consumer
-- `GET /api/consumers/:id` - Get a consumer
-- `PATCH /api/consumers/:id` - Update a consumer
-- `POST /api/consumers/:id/root_user/email/verification` - Send email verification code
-- `POST /api/consumers/:id/root_user/email/verify` - Verify email
-- `POST /api/consumers/:id/kyc/start` - Start KYC process
-- `GET /api/consumers/:id/kyc` - Get KYC status
-- `POST /api/consumers/:id/charge_fee` - Charge fee to consumer
+### 3. Create a Managed Account
 
-### Users
-- `POST /api/users` - Create a user
-- `GET /api/users` - Get all users
-- `GET /api/users/:id` - Get a user
-- `PATCH /api/users/:id` - Update a user
-- `POST /api/users/:id/activate` - Activate a user
-- `POST /api/users/:id/deactivate` - Deactivate a user
-- `POST /api/users/invite` - Send user invite
-- `POST /api/users/invite/validate` - Validate user invite
-- `POST /api/users/invite/consume` - Consume user invite
-- `POST /api/users/:id/email/verification` - Send email verification code
-- `POST /api/users/:id/email/verify` - Verify email
-- `POST /api/users/:id/kyc` - Start KYC for user
+```bash
+curl -X POST http://localhost:3000/api/accounts \
+  -H "x-api-key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile_id": "profile_123",
+    "friendlyName": "Main Account"
+  }'
+```
 
-### Beneficiaries
-- `POST /api/beneficiaries/batch` - Add beneficiaries in batch
-- `GET /api/beneficiaries` - Get all beneficiaries
-- `POST /api/beneficiaries/batch/remove` - Remove beneficiaries in batch
-- `GET /api/beneficiaries/:id` - Get a beneficiary
-- `GET /api/beneficiaries/batch` - Get all beneficiary batches
-- `GET /api/beneficiaries/batch/:id` - Get a beneficiary batch
-- `POST /api/beneficiaries/batch/:id/sca/otp` - Issue OTP for beneficiary batch verification
-- `POST /api/beneficiaries/batch/:id/sca/otp/verify` - Verify beneficiary batch with OTP
-- `POST /api/beneficiaries/batch/:id/sca/push` - Issue push notification for beneficiary batch verification
+### 4. Retrieve IBAN
 
-### Accounts
-- `GET /api/accounts` - Get all managed accounts
-- `POST /api/accounts` - Create a managed account
-- `GET /api/accounts/:id` - Get a specific account
-- `PATCH /api/accounts/:id` - Update an account
-- `POST /api/accounts/:id/block` - Block an account
-- `POST /api/accounts/:id/unblock` - Unblock an account
-- `GET /api/accounts/:id/statement` - Get account statement
-- `POST /api/accounts/:id/iban` - Upgrade account with IBAN
-- `GET /api/accounts/:id/iban` - Get account IBAN
-- `DELETE /api/accounts/:id` - Remove an account
+```bash
+curl -X GET http://localhost:3000/api/accounts/123/iban \
+  -H "x-api-key: your-api-key"
+```
 
-### Cards
-- `GET /api/cards` - Get all managed cards
-- `POST /api/cards` - Create a managed card
-- `GET /api/cards/:id` - Get a specific card
-- `PATCH /api/cards/:id` - Update a card
-- `POST /api/cards/:id/block` - Block a card
-- `POST /api/cards/:id/unblock` - Unblock a card
-- `DELETE /api/cards/:id` - Remove a card
-- `GET /api/cards/:id/statement` - Get card statement
-- `POST /api/cards/:id/assign` - Assign a card
-- `GET /api/cards/:id/spend-rules` - Get spend rules
-- `POST /api/cards/:id/spend-rules` - Create spend rules
-- `PATCH /api/cards/:id/spend-rules` - Update spend rules
-- `DELETE /api/cards/:id/spend-rules` - Delete spend rules
-- Physical card endpoints for upgrade, activation, PIN management, replacement, etc.
+## 📚 Documentation
 
-### Linked Accounts
-- `POST /api/linked-accounts` - Add a linked account
-- `GET /api/linked-accounts` - Get all linked accounts
-- `GET /api/linked-accounts/:id` - Get a linked account
-- `PATCH /api/linked-accounts/:id` - Update a linked account
-- `POST /api/linked-accounts/:id/remove` - Remove a linked account
-- `POST /api/linked-accounts/:id/block` - Block a linked account
-- `POST /api/linked-accounts/:id/unblock` - Unblock a linked account
-- `GET /api/linked-accounts/verifications` - Get linked account verifications
+### 📖 API Documentation
+- **[Complete API Reference](docs/API.md)** - All endpoints with examples
+- **[Models Documentation](docs/Models.md)** - Data structures and schemas
+- **[Controllers Guide](docs/Controllers.md)** - Implementation details
+- **[Changelog](CHANGELOG.md)** - Version history and release notes
+
+### 🔧 Technical Documentation
+- **[Services Architecture](docs/Services.md)** - Service layer overview
+- **[Mobile Integration](docs/MOBILE_INTEGRATION.md)** - Mobile app integration
+- **[API Keys Guide](docs/API_KEYS_README.md)** - API key management
+
+### 🔒 Security Documentation
+- **[Security Policy](SECURITY.md)** - Security guidelines and reporting
+- **[Code of Conduct](CODE_OF_CONDUCT.md)** - Community standards
+
+## 🔧 API Endpoints
+
+### Authentication & Users
+- `POST /api/auth/login` - User authentication
+- `POST /api/consumers` - Create consumer profile
+- `POST /api/corporates` - Create corporate profile
+- `GET /api/users/:id` - Get user details
+
+### Accounts & Cards
+- `POST /api/accounts` - Create managed account
+- `GET /api/accounts/:id/iban` - Retrieve IBAN
+- `POST /api/cards` - Create managed card
+- `GET /api/cards/:id` - Get card details
 
 ### Transactions
-#### Sends
-- `POST /api/transactions/sends` - Create a send transaction
-- `GET /api/transactions/sends` - Get all send transactions
-- `POST /api/transactions/sends/bulk` - Create bulk send transactions
-- `POST /api/transactions/sends/cancel` - Cancel send transactions
-- `GET /api/transactions/sends/:id` - Get a send transaction
-- `POST /api/transactions/sends/:id/sca/otp` - Issue OTP for send verification
-- `POST /api/transactions/sends/:id/sca/otp/verify` - Verify send with OTP
-- `POST /api/transactions/sends/:id/sca/push` - Issue push notification for send verification
+- `POST /api/transactions/sends` - Send money
+- `POST /api/transactions/transfers` - Transfer between accounts
+- `GET /api/transactions` - List transactions
 
-#### Transfers
-- `POST /api/transactions/transfers` - Create a transfer transaction
-- `GET /api/transactions/transfers` - Get all transfer transactions
-- `POST /api/transactions/transfers/cancel` - Cancel transfer transactions
-- `GET /api/transactions/transfers/:id` - Get a transfer transaction
+### Regulatory Compliance
+- `POST /api/regulatory/transactions` - Process regulated transactions
+- `GET /api/regulatory/accounts/:id/iban` - Get compliance IBAN
 
-#### Outgoing Wire Transfers
-- `POST /api/transactions/outgoing-wire-transfers` - Create an outgoing wire transfer
-- `GET /api/transactions/outgoing-wire-transfers` - Get all outgoing wire transfers
-- `POST /api/transactions/outgoing-wire-transfers/bulk` - Create bulk outgoing wire transfers
-- `POST /api/transactions/outgoing-wire-transfers/cancel` - Cancel outgoing wire transfers
-- `GET /api/transactions/outgoing-wire-transfers/:id` - Get an outgoing wire transfer
-- `POST /api/transactions/outgoing-wire-transfers/:id/cancel` - Cancel specific outgoing wire transfer
-- `POST /api/transactions/outgoing-wire-transfers/:id/confirm` - Confirm outgoing wire transfer
-- `POST /api/transactions/outgoing-wire-transfers/:id/sca/otp` - Issue OTP for wire transfer verification
-- `POST /api/transactions/outgoing-wire-transfers/:id/sca/otp/verify` - Verify wire transfer with OTP
-- `POST /api/transactions/outgoing-wire-transfers/:id/sca/push` - Issue push notification for wire transfer verification
+### Strong Customer Authentication (SCA)
+- `POST /api/sca/challenges/stepup/otp` - OTP authentication
+- `POST /api/sca/challenges/stepup/push` - Push notification auth
 
-### Bulk Operations
-#### Operations
-- `POST /api/bulk/users` - Create users in bulk
-- `POST /api/bulk/users/invite` - Send user invites in bulk
-- `POST /api/bulk/managed-cards/block` - Block cards in bulk
-- `POST /api/bulk/managed-cards/unblock` - Unblock cards in bulk
-- `POST /api/bulk/managed-cards/remove` - Remove cards in bulk
-- `PATCH /api/bulk/managed-cards/spend-rules` - Update spend rules in bulk
-- `POST /api/bulk/transfers` - Create transfer transactions in bulk
-- `POST /api/bulk/sends` - Create send transactions in bulk
-- `POST /api/bulk/outgoing-wire-transfers` - Create outgoing wire transfers in bulk
+## 🔐 Security
 
-#### Management
-- `GET /api/bulk` - Get all bulk processes
-- `GET /api/bulk/:id` - Get bulk process details
-- `GET /api/bulk/:id/operations` - Get all operations in a bulk process
-- `POST /api/bulk/:id/execute` - Execute bulk process
-- `POST /api/bulk/:id/pause` - Pause bulk process
-- `POST /api/bulk/:id/resume` - Resume bulk process
-- `POST /api/bulk/:id/cancel` - Cancel bulk process
+### Encryption & Data Protection
+- **AES256-GCM** encryption for sensitive data at rest
+- **TLS 1.3** encryption in transit
+- **bcrypt** password hashing with salt rounds
+- **JWT** tokens with configurable expiration
 
-## Authentication
+### Access Control
+- **Multi-tier API keys**: client, server, and database types
+- **Role-based access control** (RBAC)
+- **Rate limiting** with progressive delays
+- **Brute force protection** with account locking
 
-All API requests require:
-- `x-api-key` or `api_key` header with your Weavr API key
-- `authorization` or `auth_token` header with the user's auth token (for authenticated endpoints)
+### Compliance & Audit
+- **Complete audit trails** for all operations
+- **GDPR compliant** data handling
+- **PSD2/Open Banking** regulatory compliance
+- **PCI DSS** card data handling standards
 
-## Deployment
+### Security Features
+```typescript
+// Example: Encrypted API key storage
+const encryptedKey = encrypt(apiKey.secret); // AES256-GCM
+await db.query('INSERT INTO api_keys (secret) VALUES ($1)', [encryptedKey]);
+```
+
+## 🤝 Contributing
+
+We welcome contributions from the community! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Development Setup
+
+```bash
+# Fork and clone the repository
+git clone https://github.com/your-username/vaelix-api.git
+cd vaelix-api
+
+# Install dependencies
+npm install
+
+# Set up pre-commit hooks
+npm run prepare
+
+# Copy environment configuration
+cp .env.example .env
+
+# Run linting and type checking
+npm run lint
+npm run typecheck
+
+# Run tests with coverage
+npm run test:coverage
+
+# Start development server
+npm run dev
+```
+
+### Available Commands
+
+```bash
+# Development
+npm run dev              # Start development server
+npm run build            # Build for production
+npm run clean            # Clean build artifacts
+
+# Code Quality
+npm run lint             # Run ESLint
+npm run lint:fix         # Fix linting issues
+npm run format           # Format code with Prettier
+npm run typecheck        # TypeScript type checking
+
+# Testing
+npm test                 # Run tests
+npm run test:watch       # Run tests in watch mode
+npm run test:coverage    # Run tests with coverage
+npm run test:integration # Run integration tests
+
+# Docker
+npm run docker:build     # Build Docker image
+npm run docker:run       # Run Docker container
+
+# Database
+npm run migrate          # Run database migrations
+```
+
+### Code Quality
+
+- **ESLint** for code linting with TypeScript support
+- **Prettier** for code formatting
+- **Husky** pre-commit hooks for quality gates
+- **TypeScript** strict mode enabled
+- **EditorConfig** for consistent editor settings
+- **Jest** for unit and integration testing
+- **Codecov** for test coverage reporting
+
+### Testing
+
+```bash
+# Run unit tests
+npm test
+
+# Run integration tests
+npm run test:integration
+
+# Generate coverage report
+npm run test:coverage
+```
+
+## 🚀 Deployment
+
+### Production Deployment
 
 This API is configured to run under `https://api.vaelixbank.com/`. Make sure to:
 
@@ -374,12 +330,100 @@ This API is configured to run under `https://api.vaelixbank.com/`. Make sure to:
 3. Set environment variables appropriately
 4. Use a process manager like PM2 in production
 
-## Environment Variables
+### Environment Variables
 
-- `PORT` - Server port (default: 3000)
-- `NODE_ENV` - Environment (development/production)
-- `WEAVR_API_BASE_URL` - Weavr API base URL (default: https://api.weavr.io)
+```bash
+# Server Configuration
+PORT=3000
+NODE_ENV=production
 
-## License
+# Database Configuration
+DB_HOST=your_db_host
+DB_NAME=your_db_name
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+DB_PORT=5432
 
-The Vaelix Bank API use the Apache 2.0 Licence [licence](LICENSE)
+# Weavr API Configuration
+WEAVR_API_BASE_URL=https://api.weavr.io
+WEAVR_API_KEY=your_weavr_api_key
+
+# Security Configuration
+ENCRYPTION_KEY=your_64_char_hex_encryption_key
+JWT_SECRET=your_jwt_secret
+JWT_REFRESH_SECRET=your_refresh_secret
+
+# Email Configuration (optional)
+SMTP_HOST=your_smtp_host
+SMTP_PORT=587
+SMTP_USER=your_smtp_user
+SMTP_PASS=your_smtp_password
+```
+
+### Docker Deployment
+
+```bash
+# Build and run with Docker
+docker build -t vaelix-api .
+docker run -p 3000:3000 --env-file .env vaelix-api
+
+# Or use Docker Compose
+docker-compose up -d
+```
+
+### Cloud Deployment
+
+The API is designed to work with:
+- **AWS**: ECS, EKS, or Lambda
+- **Google Cloud**: Cloud Run or GKE
+- **Azure**: Container Instances or AKS
+- **Heroku**: Standard deployment
+- **DigitalOcean**: App Platform or Droplets
+
+## 📄 License
+
+This project is licensed under the **Apache License 2.0** - see the [LICENSE](LICENSE) file for details.
+
+```
+Copyright 2024 Vaelix Bank
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
+
+## 🙏 Acknowledgments
+
+- **Weavr** for providing the regulated banking infrastructure
+- **Open Banking Initiative** for the standards and specifications
+- **The Open Source Community** for the amazing tools and libraries
+
+### Built With
+
+- [Node.js](https://nodejs.org/) - Runtime environment
+- [TypeScript](https://www.typescriptlang.org/) - Type-safe JavaScript
+- [Express.js](https://expressjs.com/) - Web framework
+- [PostgreSQL](https://www.postgresql.org/) - Database
+- [Weavr Multi API](https://weavr.io/) - Banking infrastructure
+
+---
+
+<div align="center">
+
+**Vaelix Bank API** - Empowering Open Banking Innovation
+
+[![GitHub Stars](https://img.shields.io/github/stars/vaelixbank/vaelix-api?style=social)](https://github.com/vaelixbank/vaelix-api)
+[![GitHub Forks](https://img.shields.io/github/forks/vaelixbank/vaelix-api?style=social)](https://github.com/vaelixbank/vaelix-api)
+[![GitHub Issues](https://img.shields.io/github/issues/vaelixbank/vaelix-api)](https://github.com/vaelixbank/vaelix-api/issues)
+
+[📖 Documentation](docs/) • [🐛 Report Bug](https://github.com/vaelixbank/vaelix-api/issues) • [💡 Request Feature](https://github.com/vaelixbank/vaelix-api/issues)
+
+</div>
