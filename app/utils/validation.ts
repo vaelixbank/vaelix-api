@@ -283,3 +283,54 @@ export const validatePassword = (req: Request, res: Response, next: NextFunction
 
   next();
 };
+
+// Banking validations
+export const validateIBAN = (iban: string): boolean => {
+  try {
+    // Remove spaces and convert to uppercase
+    const cleanIBAN = iban.replace(/\s+/g, '').toUpperCase();
+
+    // Basic format check
+    if (!/^[A-Z]{2}\d{2}[A-Z0-9]{1,30}$/.test(cleanIBAN)) {
+      return false;
+    }
+
+    // Move first 4 characters to end
+    const rearranged = cleanIBAN.slice(4) + cleanIBAN.slice(0, 4);
+
+    // Convert letters to numbers (A=10, B=11, etc.)
+    const numericIBAN = rearranged.split('').map(char => {
+      const code = char.charCodeAt(0);
+      return code >= 65 && code <= 90 ? (code - 55).toString() : char;
+    }).join('');
+
+    // Checksum validation using modulo 97
+    const checksum = BigInt(numericIBAN) % 97n;
+    return checksum === 1n;
+  } catch (error) {
+    return false;
+  }
+};
+
+export const validateBIC = (bic: string): boolean => {
+  // BIC format: 8 or 11 characters
+  // XXXXYYZZ or XXXXYYZZZZZ where:
+  // XXXX = Bank code
+  // YY = Country code
+  // ZZ/ZZZZZ = Location code
+  const bicRegex = /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/;
+  return bicRegex.test(bic.replace(/\s+/g, '').toUpperCase());
+};
+
+export const validateSWIFTMessageType = (messageType: string): boolean => {
+  const validTypes = ['MT103', 'MT202', 'MT103STP', 'pacs008', 'pacs009'];
+  return validTypes.includes(messageType);
+};
+
+export const validateSEPAScheme = (scheme: string): boolean => {
+  return ['SCT', 'SDD'].includes(scheme);
+};
+
+export const validateChargeBearer = (bearer: string): boolean => {
+  return ['SHA', 'OUR', 'BEN'].includes(bearer);
+};

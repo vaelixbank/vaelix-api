@@ -2,13 +2,15 @@ import { AccountQueries } from '../queries/accountQueries';
 import { logger } from '../utils/logger';
 
 export interface TransactionRequest {
-  type: 'internal_transfer' | 'external_send' | 'external_receive' | 'balance_adjustment';
+  type: 'internal_transfer' | 'external_send' | 'external_receive' | 'balance_adjustment' | 'sepa_transfer' | 'swift_transfer';
   from_account_id?: number;
   to_account_id?: number;
   amount: number;
   currency: string;
   description?: string;
   external_reference?: string; // For Weavr transactions
+  // SEPA/SWIFT specific fields
+  transfer_details?: any; // For passing SEPA/SWIFT request data
 }
 
 export interface TransactionResult {
@@ -45,6 +47,12 @@ export class TransactionManager {
 
         case 'balance_adjustment':
           return await this.processBalanceAdjustment(request);
+
+        case 'sepa_transfer':
+          return await this.processSEPATransfer(request);
+
+        case 'swift_transfer':
+          return await this.processSWIFTTransfer(request);
 
         default:
           return { success: false, error: 'Unknown transaction type' };
@@ -295,8 +303,75 @@ export class TransactionManager {
   }
 
   /**
-   * Fail an external transaction (called by RegulatoryGateway on failure)
+   * Process SEPA transfer
    */
+  private static async processSEPATransfer(request: TransactionRequest): Promise<TransactionResult> {
+    try {
+      if (!request.transfer_details) {
+        return { success: false, error: 'SEPA transfer details required' };
+      }
+
+      const { SEPAService } = await import('../services/sepaService');
+      const sepaRequest = request.transfer_details as import('../services/sepaService').SEPATransferRequest;
+
+      const result = await SEPAService.processSCT(sepaRequest);
+
+      if (result.success) {
+        return {
+          success: true,
+          transaction_id: result.transfer_id,
+          local_transaction_ids: result.transfer_id ? [parseInt(result.transfer_id)] : undefined
+        };
+      } else {
+        return {
+          success: false,
+          error: result.error
+        };
+      }
+    } catch (error: any) {
+      logger.error('SEPA transfer processing failed', { error: error.message });
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Process SWIFT transfer
+   */
+  private static async processSWIFTTransfer(request: TransactionRequest): Promise<TransactionResult> {
+    try {
+      if (!request.transfer_details) {
+        return { success: false, error: 'SWIFT transfer details required' };
+      }
+
+      const { SWIFTService } = await import('../services/swiftService');
+      const swiftRequest = request.transfer_details as import('../services/swiftService').SWIFTTransferRequest;
+
+      // Get sender BIC from account (simplified - would need to be stored)
+      const senderBIC = 'VAELXXXX'; // Placeholder
+
+      const result = await SWIFTService.processSWIFTTransfer(swiftRequest, senderBIC);
+
+      if (result.success) {
+        return {
+          success: true,
+          transaction_id: result.transfer_id,
+          local_transaction_ids: result.transfer_id ? [parseInt(result.transfer_id)] : undefined
+        };
+      } else {
+        return {
+          success: false,
+          error: result.error
+        };
+      }
+    } catch (error: any) {
+      logger.error('SWIFT transfer processing failed', { error: error.message });
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+    * Fail an external transaction (called by RegulatoryGateway on failure)
+    */
   static async failExternalTransaction(localTransactionId: number, reason?: string): Promise<boolean> {
     try {
       const pool = (await import('../utils/database')).default;
