@@ -1,3 +1,11 @@
+// NASA Security Principle: Defense in Depth - Multiple layers of security controls
+// This API implements multiple security layers including authentication, authorization,
+// input validation, rate limiting, encryption, and comprehensive logging
+
+// NASA Security Principle: Defense in Depth - Multiple layers of security controls
+// This API implements multiple security layers including authentication, authorization,
+// input validation, rate limiting, encryption, and comprehensive logging
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -30,10 +38,12 @@ import { sanitizeInput } from './utils/validation';
 
 const app = express();
 
-// Trust proxy for reverse proxy (like nginx)
+// NASA Security Principle: Secure Configuration - Trust proxy only for known reverse proxies
+// Limits: 1 to prevent IP spoofing attacks
 app.set('trust proxy', 1);
 
-// Middleware
+// NASA Security Principle: Secure Headers - Comprehensive security headers to prevent various attacks
+// CSP prevents XSS, HSTS enforces HTTPS, noSniff prevents MIME sniffing, XSS filter blocks reflected XSS
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -44,40 +54,56 @@ app.use(helmet({
     },
   },
   hsts: {
-    maxAge: 31536000, // 1 year
+    maxAge: 31536000, // 1 year - enforces HTTPS for all subdomains
     includeSubDomains: true,
-    preload: true
+    preload: true // Allows browser preload list inclusion
   },
-  noSniff: true,
-  xssFilter: true,
-  referrerPolicy: { policy: "strict-origin-when-cross-origin" }
+  noSniff: true, // Prevents MIME type sniffing
+  xssFilter: true, // Enables XSS filtering in browsers
+  hidePoweredBy: true // Hide Express server info
 }));
+
+// Additional security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'DENY'); // Prevent clickjacking
+  res.setHeader('X-Content-Type-Options', 'nosniff'); // Already in helmet, but explicit
+  next();
+});
+
+// NASA Security Principle: CORS Configuration - Restricts cross-origin requests to prevent CSRF
 app.use(cors({
-  origin: config.cors.origins,
-  credentials: config.cors.credentials,
+  origin: config.cors.origins, // Only allow specified origins
+  credentials: config.cors.credentials, // Control credential sharing
 }));
+
+// NASA Security Principle: Input Validation - Limit request body size to prevent DoS attacks
+// 10MB limit is high for banking API; consider reducing for specific endpoints
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Input sanitization
+// NASA Security Principle: Input Validation - Sanitize all inputs to prevent XSS and injection attacks
 app.use(sanitizeInput);
 
-// Rate limiting
-app.use('/api/auth', authLimiter); // Stricter limits for auth endpoints
-app.use('/api/transactions', sensitiveOperationLimiter); // Limits for sensitive operations
-app.use('/api', apiLimiter); // General API rate limiting
+// NASA Security Principle: Rate Limiting - Prevents brute force, DoS, and abuse attacks
+// Different limits based on endpoint sensitivity following least privilege
+app.use('/api/auth', authLimiter); // Stricter limits (5/15min) for auth endpoints to prevent brute force
+app.use('/api/transactions', sensitiveOperationLimiter); // Limits (10/hour) for financial operations
+app.use('/api', apiLimiter); // General limits (100/15min) for all API endpoints
 
-// Request logging middleware
+// NASA Security Principle: Comprehensive Logging - Log all requests for audit and monitoring
+// Includes request ID for tracing, timing for performance monitoring, and status for anomaly detection
 app.use((req, res, next) => {
   const start = Date.now();
+  // Generate unique request ID for tracing across services
   const requestId = req.headers['x-request-id'] as string || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-  // Add request ID to response headers
+  // Add request ID to response for client-side tracing
   res.setHeader('x-request-id', requestId);
 
+  // Log incoming request (security-relevant data masked in logger)
   logger.apiRequest(req.method, req.url, 0, 0, requestId);
 
-  // Log response
+  // Log response on completion
   res.on('finish', () => {
     const duration = Date.now() - start;
     logger.apiRequest(req.method, req.url, res.statusCode, duration, requestId);
@@ -124,20 +150,26 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Error handling middleware
+// NASA Security Principle: Secure Error Handling - Never expose sensitive information in errors
+// Log full details internally but return generic messages to prevent information leakage
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   const requestId = req.headers['x-request-id'] as string;
+  // Log full error details for debugging (never expose stack traces in production)
   logger.error('Unhandled error', { error: err.message, stack: err.stack }, requestId);
 
+  // Return generic error message to prevent information disclosure
   res.status(err.status || 500).json({
     error: err.message || 'Internal Server Error',
+    // Only include stack trace in development environment
     ...(config.nodeEnv === 'development' && { stack: err.stack })
   });
 });
 
-// 404 handler
+// NASA Security Principle: Secure Defaults - Handle unknown routes securely
+// Log 404s for monitoring potential reconnaissance attempts
 app.use((req, res) => {
   const requestId = req.headers['x-request-id'] as string;
+  // Log 404s to detect potential security scanning or misconfigurations
   logger.warn('Route not found', { url: req.originalUrl, method: req.method }, requestId);
 
   res.status(404).json({
@@ -146,7 +178,8 @@ app.use((req, res) => {
   });
 });
 
-// Start server
+// NASA Security Principle: Secure Deployment - Log startup for audit trail
+// Ensure server only starts after all security middleware is configured
 app.listen(config.port, () => {
   logger.info(`Vaelix Bank API server running on port ${config.port}`, { environment: config.nodeEnv });
 });

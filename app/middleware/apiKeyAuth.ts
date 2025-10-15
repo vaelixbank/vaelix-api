@@ -1,3 +1,6 @@
+// NASA Security Principle: Authorization - Role-Based Access Control (RBAC) for API access
+// Validates API keys and enforces permissions based on key type and user roles
+
 import { Request, Response, NextFunction } from 'express';
 import { AuthQueries } from '../queries/authQueries';
 import { ApiKeyType } from '../models/ApiKey';
@@ -11,11 +14,14 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
+// NASA Security Principle: Authentication - Validate API key and secret with database lookup
+// Uses encrypted storage and expiration checks for secure credential validation
 export const authenticateApiKey = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
     const apiSecret = req.headers['x-api-secret'] as string || req.headers['api_secret'] as string;
 
+    // NASA Security Principle: Input Validation - Ensure required credentials are present
     if (!apiKey || !apiSecret) {
       return res.status(401).json({
         error: 'API key and secret required',
@@ -23,12 +29,21 @@ export const authenticateApiKey = async (req: AuthenticatedRequest, res: Respons
       });
     }
 
+    // Validate against database (credentials are encrypted at rest)
     const apiKeyData = await AuthQueries.getApiKey(apiKey, apiSecret);
 
     if (!apiKeyData) {
       return res.status(401).json({
         error: 'Invalid or expired API credentials',
         code: 'INVALID_API_CREDENTIALS'
+      });
+    }
+
+    // Check expiration
+    if (apiKeyData.expires_at && new Date(apiKeyData.expires_at) < new Date()) {
+      return res.status(401).json({
+        error: 'API key expired',
+        code: 'EXPIRED_API_KEY'
       });
     }
 
@@ -40,6 +55,7 @@ export const authenticateApiKey = async (req: AuthenticatedRequest, res: Respons
     };
     next();
   } catch (error) {
+    // Log authentication failures for security monitoring
     console.error('Error authenticating API key:', error);
     res.status(500).json({ error: 'Internal server error' });
   }

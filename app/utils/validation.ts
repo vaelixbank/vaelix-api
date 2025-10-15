@@ -89,10 +89,15 @@ export const validateFieldLength = (field: string, minLength: number, maxLength:
   };
 };
 
+// NASA Security Principle: Input Validation - Comprehensive sanitization to prevent XSS, injection attacks
+// Sanitizes all user inputs recursively, escaping dangerous characters and validating formats
 export const sanitizeInput = (req: Request, res: Response, next: NextFunction) => {
-  // Basic input sanitization - remove potential XSS characters
+  // Enhanced input sanitization - escape HTML entities and remove dangerous patterns
   const sanitizeString = (str: string): string => {
-    return str.replace(/[<>'"&]/g, (char) => {
+    if (typeof str !== 'string') return str;
+
+    // First, escape HTML entities
+    let sanitized = str.replace(/[<>'"&]/g, (char) => {
       switch (char) {
         case '<': return '&lt;';
         case '>': return '&gt;';
@@ -102,28 +107,63 @@ export const sanitizeInput = (req: Request, res: Response, next: NextFunction) =
         default: return char;
       }
     });
+
+    // Remove potential script injections
+    sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    sanitized = sanitized.replace(/javascript:/gi, '');
+    sanitized = sanitized.replace(/on\w+\s*=/gi, '');
+
+    // Remove null bytes and other control characters
+    sanitized = sanitized.replace(/[\x00-\x1F\x7F]/g, '');
+
+    return sanitized;
   };
 
-  const sanitizeObject = (obj: any): any => {
+  // NASA Security Principle: Defense in Depth - Validate and sanitize all input types
+  const sanitizeObject = (obj: any, depth: number = 0): any => {
+    // Prevent deep recursion attacks
+    if (depth > 10) {
+      throw new Error('Input validation failed: maximum depth exceeded');
+    }
+
     if (typeof obj === 'string') {
       return sanitizeString(obj);
     } else if (Array.isArray(obj)) {
-      return obj.map(sanitizeObject);
+      // Limit array size to prevent DoS
+      if (obj.length > 1000) {
+        throw new Error('Input validation failed: array too large');
+      }
+      return obj.map(item => sanitizeObject(item, depth + 1));
     } else if (obj && typeof obj === 'object') {
       const sanitized: any = {};
+      let keyCount = 0;
       for (const [key, value] of Object.entries(obj)) {
-        sanitized[key] = sanitizeObject(value);
+        // Limit object properties to prevent DoS
+        if (++keyCount > 100) {
+          throw new Error('Input validation failed: too many properties');
+        }
+        // Sanitize keys as well
+        const safeKey = sanitizeString(key);
+        sanitized[safeKey] = sanitizeObject(value, depth + 1);
       }
       return sanitized;
     }
     return obj;
   };
 
-  req.body = sanitizeObject(req.body);
-  req.query = sanitizeObject(req.query);
-  req.params = sanitizeObject(req.params);
-
-  next();
+  try {
+    req.body = sanitizeObject(req.body);
+    req.query = sanitizeObject(req.query);
+    req.params = sanitizeObject(req.params);
+    next();
+  } catch (error) {
+    // Log sanitization failures for security monitoring
+    console.error('Input sanitization failed:', error);
+    return res.status(400).json({
+      error: 'Invalid input format',
+      code: 'INVALID_INPUT'
+    });
+  }
 };
 
 export const validateEmail = (email: string): boolean => {
