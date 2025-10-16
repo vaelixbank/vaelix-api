@@ -186,7 +186,7 @@ The database schema includes **73 tables** covering:
 - **⚖️ Legal Compliance**: KYC, AML, GDPR, regulatory reporting, audit trails
 - **🔗 Weavr Integration**: Synchronization tables and Weavr-specific fields
 
-For detailed schema documentation, see [`DATABASE_SETUP.md`](DATABASE_SETUP.md).
+For detailed schema documentation, see [`DATABASE_SETUP.md`](/docs/DATABASE_SETUP.md).
 
 ### Docker Setup
 
@@ -325,7 +325,7 @@ We welcome contributions from the community! Please see our [Contributing Guide]
 
 ```bash
 # Fork and clone the repository
-git clone https://github.com/your-username/vaelix-api.git
+git clone https://github.com/vaelixbank/vaelix-api.git
 cd vaelix-api
 
 # Install dependencies
