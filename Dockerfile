@@ -9,7 +9,7 @@
 FROM node:18-alpine AS builder
 
 # Install pnpm globally
-RUN npm install -g pnpm@8.15.0
+RUN npm install -g pnpm@9.15.0
 
 # Set working directory
 WORKDIR /app
@@ -18,7 +18,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
 
 # Install dependencies (including dev dependencies for build)
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # Copy source code
 COPY . .
@@ -33,7 +33,7 @@ RUN pnpm prune --prod
 FROM node:18-alpine AS production
 
 # Install pnpm in production image
-RUN npm install -g pnpm@8.15.0
+RUN npm install -g pnpm@9.15.0
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \

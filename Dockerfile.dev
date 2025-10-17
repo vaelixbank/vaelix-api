@@ -7,7 +7,7 @@
 FROM node:18-alpine AS development
 
 # Install pnpm globally
-RUN npm install -g pnpm@8.15.0
+RUN npm install -g pnpm@9.15.0
 
 # Install development tools
 RUN apk add --no-cache \
