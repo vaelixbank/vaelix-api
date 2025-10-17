@@ -51,6 +51,16 @@ export class DatabaseManager {
         max: dbConfig.maxConnections,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 2000,
+        // Force SSL/TLS encryption for all connections
+        ssl: {
+          rejectUnauthorized: true,
+          ca: process.env.DB_SSL_CA,
+          cert: process.env.DB_SSL_CERT,
+          key: process.env.DB_SSL_KEY,
+        },
+        // Additional security options
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 0,
       };
 
       const pool = new Pool(poolConfig);
@@ -171,11 +181,26 @@ export class DatabaseManager {
     const client = await pool.connect();
 
     try {
+      // Log sensitive operations for audit
+      if (this.isSensitiveQuery(query)) {
+        console.log(`Sensitive query executed on ${databaseId}: ${query.substring(0, 100)}...`);
+      }
+
       const result = await client.query(query, params);
       return result;
     } finally {
       client.release();
     }
+  }
+
+  private isSensitiveQuery(query: string): boolean {
+    const sensitivePatterns = [
+      /INSERT INTO.*(?:users|accounts|transactions|api_keys)/i,
+      /UPDATE.*(?:users|accounts|transactions|api_keys)/i,
+      /DELETE FROM.*(?:users|accounts|transactions|api_keys)/i,
+      /SELECT.*password|secret|key|token/i
+    ];
+    return sensitivePatterns.some(pattern => pattern.test(query));
   }
 
   public async executeTransaction(databaseId: string, queries: Array<{ query: string; params?: any[] }>): Promise<any[]> {
