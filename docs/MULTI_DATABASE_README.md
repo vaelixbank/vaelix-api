@@ -1,51 +1,51 @@
 # Multi-Database Support
 
-Ce document décrit le système multi-base de données implémenté dans l'API Vaelix Bank, permettant l'interconnexion et la communication entre plusieurs serveurs PostgreSQL via des clés API dédiées.
+This document describes the multi-database system implemented in the Vaelix Bank API, enabling interconnection and communication between multiple PostgreSQL servers via dedicated API keys.
 
 ## Architecture
 
-### Composants principaux
+### Main Components
 
 1. **DatabaseManager** (`app/services/databaseManager.ts`)
-   - Gestion centralisée des connexions à plusieurs bases de données
-   - Routage automatique basé sur les clés API
-   - Monitoring de santé des bases
-   - Support pour les requêtes fédérées
+   - Centralized management of connections to multiple databases
+   - Automatic routing based on API keys
+   - Database health monitoring
+   - Support for federated queries
 
 2. **ReplicationService** (`app/services/replicationService.ts`)
-   - Synchronisation automatique entre bases de données
-   - Jobs de réplication configurables
-   - Réplication manuelle à la demande
+   - Automatic synchronization between databases
+   - Configurable replication jobs
+   - On-demand manual replication
 
 3. **DatabaseController** (`app/controllers/DatabaseController.ts`)
-   - Endpoints pour les opérations multi-base
-   - Gestion des requêtes fédérées
-   - Contrôle des jobs de réplication
+   - Endpoints for multi-database operations
+   - Federated query management
+   - Replication job control
 
-4. **Middleware de routage** (`app/middleware/apiKeyAuth.ts`)
-   - Routage automatique vers la bonne base selon la clé API
-   - Validation de santé des bases
+4. **Routing Middleware** (`app/middleware/apiKeyAuth.ts`)
+   - Automatic routing to the correct database based on API key
+   - Database health validation
 
 ## Configuration
 
-### Variables d'environnement
+### Environment Variables
 
 ```bash
-# Base primaire (obligatoire)
+# Primary database (required)
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=vaelixbank
 DB_USER=postgres
 DB_PASSWORD=password
 
-# Base secondaire (optionnelle)
+# Secondary database (optional)
 DB2_HOST=secondary-db.example.com
 DB2_PORT=5432
 DB2_NAME=vaelixbank_secondary
 DB2_USER=postgres
 DB2_PASSWORD=password
 
-# Base d'analytics (optionnelle)
+# Analytics database (optional)
 DB3_HOST=analytics-db.example.com
 DB3_PORT=5432
 DB3_NAME=vaelixbank_analytics
@@ -53,9 +53,9 @@ DB3_USER=postgres
 DB3_PASSWORD=password
 ```
 
-### Configuration des bases
+### Database Configuration
 
-La configuration des bases se fait automatiquement dans `app/config/index.ts` :
+Database configuration is done automatically in `app/config/index.ts`:
 
 ```typescript
 databases: [
@@ -71,15 +71,15 @@ databases: [
     region: 'eu-west',
     readOnly: false,
   },
-  // ... autres bases
+  // ... other databases
 ]
 ```
 
-## Utilisation
+## Usage
 
-### Authentification
+### Authentication
 
-Toutes les opérations multi-base nécessitent une clé API de type `database` :
+All multi-database operations require a `database` type API key:
 
 ```bash
 curl -X POST /api/database/query \
@@ -89,17 +89,17 @@ curl -X POST /api/database/query \
   -d '{"query": "SELECT * FROM users LIMIT 10"}'
 ```
 
-### Endpoints disponibles
+### Available Endpoints
 
-#### Exécution de requêtes
+#### Query Execution
 
 ```http
 POST /api/database/query
 ```
 
-Exécute une requête sur la base routée automatiquement.
+Executes a query on the automatically routed database.
 
-**Exemple :**
+**Example:**
 ```json
 {
   "query": "SELECT id, name FROM accounts WHERE balance > 1000",
@@ -107,15 +107,15 @@ Exécute une requête sur la base routée automatiquement.
 }
 ```
 
-#### Transactions multi-requêtes
+#### Multi-Query Transactions
 
 ```http
 POST /api/database/transaction
 ```
 
-Exécute plusieurs requêtes dans une transaction.
+Executes multiple queries in a transaction.
 
-**Exemple :**
+**Example:**
 ```json
 {
   "queries": [
@@ -131,15 +131,15 @@ Exécute plusieurs requêtes dans une transaction.
 }
 ```
 
-#### Requêtes fédérées
+#### Federated Queries
 
 ```http
 POST /api/database/federated-query
 ```
 
-Exécute une requête sur plusieurs bases simultanément.
+Executes a query on multiple databases simultaneously.
 
-**Exemple :**
+**Example:**
 ```json
 {
   "query": "SELECT COUNT(*) as user_count FROM users",
@@ -147,45 +147,45 @@ Exécute une requête sur plusieurs bases simultanément.
 }
 ```
 
-#### Informations sur les bases
+#### Database Information
 
 ```http
 GET /api/database/info
 ```
 
-Retourne les informations sur la base courante et toutes les bases disponibles.
+Returns information about the current database and all available databases.
 
-#### Schéma de base de données
+#### Database Schema
 
 ```http
 GET /api/database/schema
 ```
 
-Retourne la structure des tables de la base routée.
+Returns the table structure of the routed database.
 
-#### Health check
+#### Health Check
 
 ```http
 GET /api/database/health
 ```
 
-Vérifie la santé de la base routée.
+Checks the health of the routed database.
 
-### Gestion de la réplication
+### Replication Management
 
-#### Lister les jobs de réplication
+#### List Replication Jobs
 
 ```http
 GET /api/database/replication/jobs
 ```
 
-#### Créer un job de réplication
+#### Create Replication Job
 
 ```http
 POST /api/database/replication/jobs
 ```
 
-**Exemple :**
+**Example:**
 ```json
 {
   "sourceDatabase": "primary",
@@ -197,19 +197,19 @@ POST /api/database/replication/jobs
 }
 ```
 
-#### Lancer une réplication manuelle
+#### Run Manual Replication
 
 ```http
 POST /api/database/replication/jobs/{jobId}/run
 ```
 
-#### Répliquer une table immédiatement
+#### Replicate Table Immediately
 
 ```http
 POST /api/database/replication/table
 ```
 
-**Exemple :**
+**Example:**
 ```json
 {
   "sourceDatabase": "primary",
@@ -219,17 +219,17 @@ POST /api/database/replication/table
 }
 ```
 
-## Routage automatique
+## Automatic Routing
 
-Le système route automatiquement les requêtes vers la bonne base selon le type de clé API :
+The system automatically routes requests to the correct database based on the API key type:
 
-- **Clés `database`** : Routage basé sur l'ID utilisateur (sharding simple)
-- **Clés `client`** : Toujours vers la base primaire
-- **Clés `server`** : Accès à toutes les bases selon le contexte
+- **Database keys**: Routing based on user ID (simple sharding)
+- **Client keys**: Always to the primary database
+- **Server keys**: Access to all databases based on context
 
-### Logique de sharding
+### Sharding Logic
 
-Par défaut, un sharding simple basé sur la parité de l'ID utilisateur :
+By default, simple sharding based on user ID parity:
 
 ```typescript
 private routeByUserId(userId: number): string {
@@ -243,17 +243,17 @@ private routeByUserId(userId: number): string {
 }
 ```
 
-## Monitoring et santé
+## Monitoring and Health
 
-### Checks de santé automatiques
+### Automatic Health Checks
 
-Le système effectue des checks de santé toutes les 30 secondes :
+The system performs health checks every 30 seconds:
 
-- Connexions actives
-- Temps de réponse
-- État des pools de connexions
+- Active connections
+- Response time
+- Connection pool status
 
-### Métriques disponibles
+### Available Metrics
 
 ```json
 {
@@ -270,65 +270,65 @@ Le système effectue des checks de santé toutes les 30 secondes :
 }
 ```
 
-## Sécurité
+## Security
 
-### Authentification obligatoire
+### Mandatory Authentication
 
-Toutes les opérations multi-base nécessitent :
-- Clé API valide de type `database`
-- Secret API correspondant
-- Base de données saine
+All multi-database operations require:
+- Valid `database` type API key
+- Corresponding API secret
+- Healthy database
 
-### Isolation des données
+### Data Isolation
 
-- Chaque clé API ne peut accéder qu'à une base spécifique
-- Les requêtes fédérées sont contrôlées
-- Audit trail complet des opérations
+- Each API key can only access a specific database
+- Federated queries are controlled
+- Complete audit trail of operations
 
 ## Performance
 
-### Optimisations
+### Optimizations
 
-- Pools de connexions configurables
-- Requêtes parallèles pour les opérations fédérées
-- Cache des métadonnées de santé
-- Transactions optimisées
+- Configurable connection pools
+- Parallel queries for federated operations
+- Health metadata caching
+- Optimized transactions
 
 ### Limitations
 
-- Pas de support pour les requêtes JOIN cross-database natives
-- Latence réseau pour les opérations fédérées
-- Consistance éventuelle pour la réplication
+- No support for native cross-database JOIN queries
+- Network latency for federated operations
+- Eventual consistency for replication
 
-## Déploiement
+## Deployment
 
-### Prérequis
+### Prerequisites
 
-1. Plusieurs instances PostgreSQL configurées
-2. Réseau permettant la connectivité entre serveurs
-3. Clés API de type `database` créées
+1. Multiple PostgreSQL instances configured
+2. Network allowing connectivity between servers
+3. `database` type API keys created
 
-### Démarrage
+### Startup
 
-Le système s'initialise automatiquement au démarrage de l'API :
+The system initializes automatically when the API starts:
 
-1. Connexions aux bases configurées
-2. Démarrage des checks de santé
-3. Initialisation des jobs de réplication par défaut
+1. Connections to configured databases
+2. Health check startup
+3. Default replication job initialization
 
 ### Monitoring
 
-Surveiller les logs pour :
-- Échecs de connexion aux bases
-- Erreurs de réplication
-- Performances des requêtes fédérées
+Monitor logs for:
+- Database connection failures
+- Replication errors
+- Federated query performance
 
-## Exemples d'usage
+## Usage Examples
 
-### Migration de données
+### Data Migration
 
 ```bash
-# Répliquer une table vers plusieurs bases
+# Replicate a table to multiple databases
 curl -X POST /api/database/replication/table \
   -H "X-API-Key: ..." \
   -H "X-API-Secret: ..." \
@@ -340,10 +340,10 @@ curl -X POST /api/database/replication/table \
   }'
 ```
 
-### Requête analytique fédérée
+### Federated Analytics Query
 
 ```bash
-# Compter les utilisateurs sur toutes les bases
+# Count users across all databases
 curl -X POST /api/database/federated-query \
   -H "X-API-Key: ..." \
   -H "X-API-Secret: ..." \
@@ -352,10 +352,10 @@ curl -X POST /api/database/federated-query \
   }'
 ```
 
-### Health check global
+### Global Health Check
 
 ```bash
-# Vérifier l'état de toutes les bases
+# Check status of all databases
 curl -X GET /api/database/info \
   -H "X-API-Key: ..." \
   -H "X-API-Secret: ..."
