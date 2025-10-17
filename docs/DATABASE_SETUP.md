@@ -1,191 +1,191 @@
 # 🗄️ Vaelix Bank API - Database Setup Guide
 
-Ce guide explique comment configurer et injecter le schéma de base de données pour l'API Vaelix Bank.
+This guide explains how to configure and inject the database schema for the Vaelix Bank API.
 
-## 📋 Prérequis
+## 📋 Prerequisites
 
-- PostgreSQL 12+ installé et en cours d'exécution
-- Node.js 16+ installé
-- Accès à une base de données PostgreSQL
+- PostgreSQL 12+ installed and running
+- Node.js 16+ installed
+- Access to a PostgreSQL database
 
-## ⚙️ Configuration des Variables d'Environnement
+## ⚙️ Environment Variables Configuration
 
-1. **Copiez le fichier d'exemple d'environnement :**
+1. **Copy the environment example file:**
    ```bash
    cp .env.example .env
    ```
 
-2. **Configurez les variables de base de données dans `.env` :**
+2. **Configure database variables in `.env`:**
    ```env
    # Database Configuration
-   DB_HOST=localhost          # Adresse du serveur PostgreSQL
-   DB_PORT=5432              # Port PostgreSQL (défaut: 5432)
-   DB_NAME=vaelixbank        # Nom de la base de données
-   DB_USER=vaelixbank_user   # Utilisateur PostgreSQL
-   DB_PASSWORD=your_password # Mot de passe sécurisé
+   DB_HOST=localhost          # PostgreSQL server address
+   DB_PORT=5432              # PostgreSQL port (default: 5432)
+   DB_NAME=vaelixbank        # Database name
+   DB_USER=vaelixbank_user   # PostgreSQL user
+   DB_PASSWORD=your_password # Secure password
    ```
 
-3. **Variables optionnelles :**
+3. **Optional variables:**
    ```env
-   NODE_ENV=development      # Environnement (development/production)
+   NODE_ENV=development      # Environment (development/production)
    ```
 
-## 🚀 Injection du Schéma de Base de Données
+## 🚀 Database Schema Injection
 
-### Méthode 1: Utilisation du Script Automatique (Recommandé)
+### Method 1: Using the Automatic Script (Recommended)
 
-Le script automatique gère la connexion, la validation et l'injection du schéma :
+The automatic script handles connection, validation, and schema injection:
 
 ```bash
-# Injection complète du schéma
+# Complete schema injection
 npm run db:schema
 
-# Ou directement avec Node.js
+# Or directly with Node.js
 node scripts/inject-schema.js
 ```
 
-**Ce que fait le script :**
-- ✅ Valide les variables d'environnement
-- ✅ Teste la connexion à la base de données
-- ✅ Lit et parse le fichier `data/schema-pgsql.sql`
-- ✅ Exécute toutes les instructions SQL
-- ✅ Gère les erreurs et continue l'exécution
-- ✅ Affiche un rapport détaillé des opérations
+**What the script does:**
+- ✅ Validates environment variables
+- ✅ Tests database connection
+- ✅ Reads and parses the `data/schema-pgsql.sql` file
+- ✅ Executes all SQL statements
+- ✅ Handles errors and continues execution
+- ✅ Displays detailed operation report
 
-### Méthode 2: Injection Manuelle avec psql
+### Method 2: Manual Injection with psql
 
-Si vous préférez une approche manuelle :
+If you prefer a manual approach:
 
 ```bash
-# Via psql directement
+# Via psql directly
 psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f data/schema-pgsql.sql
 
-# Ou via Docker si vous utilisez PostgreSQL en conteneur
+# Or via Docker if using PostgreSQL in container
 docker exec -i vaelixbank-postgres psql -U $DB_USER -d $DB_NAME < data/schema-pgsql.sql
 ```
 
-## 📊 Contenu du Schéma
+## 📊 Schema Content
 
-Le schéma inclut **73 tables** organisées en sections :
+The schema includes **73 tables** organized in sections:
 
-### 🏦 **Core Banking (Tables de Base)**
-- `users` - Utilisateurs et authentification
-- `accounts` - Comptes bancaires
-- `transactions` - Transactions financières
-- `cards` - Cartes de paiement
-- `wallets` - Portefeuilles électroniques
+### 🏦 **Core Banking (Base Tables)**
+- `users` - Users and authentication
+- `accounts` - Bank accounts
+- `transactions` - Financial transactions
+- `cards` - Payment cards
+- `wallets` - Electronic wallets
 
 ### 🔓 **Open Banking (Berlin Group API)**
-- `open_banking_consents` - Consentements Open Banking
-- `payment_initiations` - Initiations de paiement
-- `webhook_subscriptions` - Abonnements webhooks
-- `webhook_events_open_banking` - Événements Open Banking
+- `open_banking_consents` - Open Banking consents
+- `payment_initiations` - Payment initiations
+- `webhook_subscriptions` - Webhook subscriptions
+- `webhook_events_open_banking` - Open Banking events
 
 ### 🏢 **BaaS (Banking as a Service)**
-- `baas_customers` - Clients BaaS
-- `baas_accounts` - Comptes BaaS
-- `baas_cards` - Cartes BaaS
-- `baas_transactions` - Transactions BaaS
+- `baas_customers` - BaaS customers
+- `baas_accounts` - BaaS accounts
+- `baas_cards` - BaaS cards
+- `baas_transactions` - BaaS transactions
 
-### ⚖️ **Conformité Légale (KYC, AML, RGPD)**
-- `kyc_profiles` - Profils KYC avancés
-- `aml_screening_results` - Résultats de screening AML
-- `regulatory_reports` - Rapports réglementaires
-- `compliance_incidents` - Incidents de conformité
-- `consent_records` - Gestion des consentements RGPD
-- `risk_assessments` - Évaluations des risques
-- `audit_trail` - Traçabilité complète
-- `security_events` - Événements de sécurité
+### ⚖️ **Legal Compliance (KYC, AML, GDPR)**
+- `kyc_profiles` - Advanced KYC profiles
+- `aml_screening_results` - AML screening results
+- `regulatory_reports` - Regulatory reports
+- `compliance_incidents` - Compliance incidents
+- `consent_records` - GDPR consent management
+- `risk_assessments` - Risk assessments
+- `audit_trail` - Complete traceability
+- `security_events` - Security events
 
-### 🔗 **Intégration Weavr**
-- Champs Weavr dans toutes les tables pertinentes
-- `weavr_sync` - Synchronisation bidirectionnelle
-- Références KYC et vérifications Weavr
+### 🔗 **Weavr Integration**
+- Weavr fields in all relevant tables
+- `weavr_sync` - Bidirectional synchronization
+- KYC references and Weavr verifications
 
-## 🔍 Validation du Schéma
+## 🔍 Schema Validation
 
-Après l'injection, vous pouvez valider que tout est correct :
+After injection, you can validate that everything is correct:
 
 ```bash
-# Validation de la syntaxe du schéma
+# Schema syntax validation
 npm run db:validate
 
-# Ou vérifier manuellement le nombre de tables
+# Or manually check the number of tables
 psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';"
 ```
 
-## 🛠️ Dépannage
+## 🛠️ Troubleshooting
 
-### Erreur de Connexion
+### Connection Error
 ```
 ❌ Missing required environment variables
 ```
-**Solution :** Vérifiez que toutes les variables `DB_*` sont définies dans `.env`
+**Solution:** Verify that all `DB_*` variables are defined in `.env`
 
-### Erreur d'Authentification
+### Authentication Error
 ```
 FATAL: password authentication failed
 ```
-**Solution :** Vérifiez les identifiants PostgreSQL et les permissions utilisateur
+**Solution:** Check PostgreSQL credentials and user permissions
 
-### Tables Déjà Existantes
+### Tables Already Exist
 ```
 ERROR: relation "users" already exists
 ```
-**Solution :** Le script gère automatiquement ces erreurs et continue. C'est normal lors de ré-exécutions.
+**Solution:** The script automatically handles these errors and continues. This is normal during re-executions.
 
-### Erreurs de Permissions
+### Permission Errors
 ```
 ERROR: permission denied for database
 ```
-**Solution :** Accordez les permissions nécessaires à l'utilisateur PostgreSQL :
+**Solution:** Grant necessary permissions to the PostgreSQL user:
 ```sql
 GRANT ALL PRIVILEGES ON DATABASE vaelixbank TO vaelixbank_user;
 ```
 
-## 📈 Performances et Indexation
+## 📈 Performance and Indexing
 
-Le schéma inclut **80+ indexes** optimisés pour :
-- ✅ Requêtes fréquentes (recherche par ID, statut, dates)
-- ✅ Jointures complexes (relations entre entités)
-- ✅ Filtrage réglementaire (KYC, AML, audit)
-- ✅ Recherche temporelle (transactions, événements)
+The schema includes **80+ indexes** optimized for:
+- ✅ Frequent queries (search by ID, status, dates)
+- ✅ Complex joins (entity relationships)
+- ✅ Regulatory filtering (KYC, AML, audit)
+- ✅ Temporal search (transactions, events)
 
-## 🔐 Sécurité
+## 🔐 Security
 
-- ✅ **Chiffrement des mots de passe** et données sensibles
-- ✅ **Contraintes de validation** sur toutes les données critiques
-- ✅ **Audit trails complets** pour conformité
-- ✅ **Gestion des permissions** granulaire
+- ✅ **Password encryption** and sensitive data
+- ✅ **Validation constraints** on all critical data
+- ✅ **Complete audit trails** for compliance
+- ✅ **Granular permission management**
 
-## 🚀 Prochaines Étapes
+## 🚀 Next Steps
 
-Après l'injection du schéma :
+After schema injection:
 
-1. **Démarrer l'API :**
+1. **Start the API:**
    ```bash
    npm start
    ```
 
-2. **Créer un utilisateur administrateur :**
+2. **Create an administrator user:**
    ```bash
-   # Utilisez les endpoints d'authentification
+   # Use authentication endpoints
    ```
 
-3. **Configurer Weavr :**
-   - Définir `WEAVR_API_KEY` dans `.env`
-   - Tester l'intégration Weavr
+3. **Configure Weavr:**
+   - Set `WEAVR_API_KEY` in `.env`
+   - Test Weavr integration
 
-4. **Configurer la surveillance :**
-   - Logs, métriques, alertes
+4. **Configure monitoring:**
+   - Logs, metrics, alerts
 
 ## 📞 Support
 
-En cas de problème :
-1. Vérifiez les logs du script d'injection
-2. Consultez les erreurs PostgreSQL détaillées
-3. Vérifiez la configuration réseau et les firewalls
+In case of issues:
+1. Check the injection script logs
+2. Review detailed PostgreSQL errors
+3. Verify network configuration and firewalls
 
 ---
 
-**🎉 Votre base de données Vaelix Bank est maintenant prête pour la production !**
+**🎉 Your Vaelix Bank database is now ready for production!**
