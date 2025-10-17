@@ -2,8 +2,10 @@
 // Validates API keys and enforces permissions based on key type and user roles
 
 import { Request, Response, NextFunction } from 'express';
+import { Pool } from 'pg';
 import { AuthQueries } from '../queries/authQueries';
 import { ApiKeyType } from '../models/ApiKey';
+import DatabaseManager from '../services/databaseManager';
 
 export interface AuthenticatedRequest extends Request {
   apiKey?: {
@@ -12,6 +14,8 @@ export interface AuthenticatedRequest extends Request {
     type: ApiKeyType;
     expires_at?: Date;
   };
+  databasePool?: Pool;
+  databaseId?: string;
 }
 
 // NASA Security Principle: Authentication - Validate API key and secret with database lookup
@@ -117,4 +121,55 @@ export const requireRole = (requiredRole: string) => {
       res.status(500).json({ error: 'Internal server error' });
     }
   };
+};
+
+// Route to appropriate database based on API key
+export const routeToDatabase = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  if (!req.apiKey) {
+    return res.status(401).json({
+      error: 'Authentication required',
+      code: 'MISSING_AUTH'
+    });
+  }
+
+  try {
+    const dbManager = DatabaseManager.getInstance();
+    const pool = dbManager.getPoolByApiKey(req.apiKey.type, req.apiKey.user_id);
+
+    // Determine database ID for logging/monitoring
+    const databaseId = dbManager['resolveDatabaseId'](req.apiKey.type, req.apiKey.user_id);
+
+    req.databasePool = pool;
+    req.databaseId = databaseId;
+
+    next();
+  } catch (error) {
+    console.error('Error routing to database:', error);
+    res.status(500).json({
+      error: 'Database routing failed',
+      code: 'DATABASE_ROUTING_ERROR'
+    });
+  }
+};
+
+// Ensure database is healthy before proceeding
+export const requireHealthyDatabase = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  if (!req.databaseId) {
+    return res.status(500).json({
+      error: 'Database not routed',
+      code: 'DATABASE_NOT_ROUTED'
+    });
+  }
+
+  const dbManager = DatabaseManager.getInstance();
+  const healthyDbs = dbManager.getHealthyDatabases();
+
+  if (!healthyDbs.includes(req.databaseId)) {
+    return res.status(503).json({
+      error: 'Database temporarily unavailable',
+      code: 'DATABASE_UNHEALTHY'
+    });
+  }
+
+  next();
 };
