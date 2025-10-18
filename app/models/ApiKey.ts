@@ -10,6 +10,12 @@ export interface ApiKey {
   description?: string;
   expires_at?: Date;
   created_at: Date;
+  // Certificate-based authentication fields
+  certificate_fingerprint?: string;
+  certificate_subject?: string;
+  certificate_issuer?: string;
+  certificate_serial?: string;
+  certificate_pem?: string;
 }
 
 export interface CreateApiKeyRequest {
@@ -18,6 +24,8 @@ export interface CreateApiKeyRequest {
   name?: string;
   description?: string;
   expires_at?: Date;
+  // Certificate-based authentication fields
+  certificate_pem?: string;
 }
 
 export interface UpdateApiKeyRequest {

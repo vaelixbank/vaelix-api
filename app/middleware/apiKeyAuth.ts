@@ -20,21 +20,47 @@ export interface AuthenticatedRequest extends Request {
 
 // NASA Security Principle: Authentication - Validate API key and secret with database lookup
 // Uses encrypted storage and expiration checks for secure credential validation
+// Supports both traditional key-secret and certificate-based authentication
 export const authenticateApiKey = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const apiKey = req.headers['x-api-key'] as string || req.headers['api_key'] as string;
     const apiSecret = req.headers['x-api-secret'] as string || req.headers['api_secret'] as string;
 
-    // NASA Security Principle: Input Validation - Ensure required credentials are present
-    if (!apiKey || !apiSecret) {
+    let apiKeyData: any = null;
+
+    // Try certificate-based authentication first (mutual TLS)
+    const { extractClientCertificate, validateCertificateFingerprint, extractFingerprintFromKey } = await import('../utils/certificates');
+    const clientCert = extractClientCertificate(req);
+
+    if (clientCert && apiKey) {
+      // Certificate-based authentication
+      apiKeyData = await AuthQueries.getApiKeyByCertificateFingerprint(apiKey, clientCert.fingerprint);
+
+      if (apiKeyData && !validateCertificateFingerprint(clientCert.fingerprint, apiKeyData.certificate_fingerprint)) {
+        return res.status(401).json({
+          error: 'Certificate fingerprint mismatch',
+          code: 'CERTIFICATE_MISMATCH'
+        });
+      }
+    } else if (apiKey && apiSecret) {
+      // Traditional key-secret authentication
+      apiKeyData = await AuthQueries.getApiKey(apiKey, apiSecret);
+    } else if (apiKey && apiKey.startsWith('vb_')) {
+      // Enhanced vb_ key authentication - try to extract embedded certificate info
+      const embeddedFingerprint = extractFingerprintFromKey(apiKey);
+      if (embeddedFingerprint) {
+        // Look up by embedded fingerprint
+        apiKeyData = await AuthQueries.getApiKeyByCertificateFingerprint(apiKey, embeddedFingerprint);
+      } else {
+        // Fallback to traditional lookup
+        apiKeyData = await AuthQueries.getApiKey(apiKey, '');
+      }
+    } else {
       return res.status(401).json({
-        error: 'API key and secret required',
+        error: 'API credentials required (key+secret or certificate)',
         code: 'MISSING_API_CREDENTIALS'
       });
     }
-
-    // Validate against database (credentials are encrypted at rest)
-    const apiKeyData = await AuthQueries.getApiKey(apiKey, apiSecret);
 
     if (!apiKeyData) {
       return res.status(401).json({

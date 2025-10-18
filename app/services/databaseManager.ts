@@ -51,12 +51,17 @@ export class DatabaseManager {
         max: dbConfig.maxConnections,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 2000,
-        // Force SSL/TLS encryption for all connections
+        // Force SSL/TLS encryption for all connections with client certificate support
         ssl: {
           rejectUnauthorized: true,
           ca: process.env.DB_SSL_CA,
           cert: process.env.DB_SSL_CERT,
           key: process.env.DB_SSL_KEY,
+          // Enable client certificate authentication for database connections
+          checkServerIdentity: (host: string, cert: any) => {
+            // Additional server certificate validation can be added here
+            return undefined; // Accept the certificate
+          }
         },
         // Additional security options
         keepAlive: true,

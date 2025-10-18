@@ -52,11 +52,36 @@ export class AuthQueries {
   }
 
   // Insert API key
-  static async createApiKey(user_id: number, key: string, secret: string, type: string = 'client', name?: string, description?: string, expires_at?: Date) {
+  static async createApiKey(
+    user_id: number,
+    key: string,
+    secret: string,
+    type: string = 'client',
+    name?: string,
+    description?: string,
+    expires_at?: Date,
+    certificate?: {
+      fingerprint: string;
+      subject: string;
+      issuer: string;
+      serial: string;
+      pem: string;
+    }
+  ) {
     const encryptedSecret = encrypt(secret);
     const result = await pool.query(
-      'INSERT INTO api_keys (user_id, key, secret, type, name, description, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING id, user_id, key, type, name, description, expires_at, created_at',
-      [user_id, key, encryptedSecret, type, name, description, expires_at]
+      `INSERT INTO api_keys (
+        user_id, key, secret, type, name, description, expires_at,
+        certificate_fingerprint, certificate_subject, certificate_issuer, certificate_serial, certificate_pem,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+      RETURNING id, user_id, key, type, name, description, expires_at,
+               certificate_fingerprint, certificate_subject, certificate_issuer, certificate_serial,
+               created_at`,
+      [
+        user_id, key, encryptedSecret, type, name, description, expires_at,
+        certificate?.fingerprint, certificate?.subject, certificate?.issuer, certificate?.serial, certificate?.pem
+      ]
     );
     return result.rows[0];
   }
@@ -81,6 +106,15 @@ export class AuthQueries {
       }
     }
     return null;
+  }
+
+  // Get API key by key and certificate fingerprint
+  static async getApiKeyByCertificateFingerprint(key: string, fingerprint: string) {
+    const result = await pool.query(
+      'SELECT * FROM api_keys WHERE key = $1 AND certificate_fingerprint = $2',
+      [key, fingerprint]
+    );
+    return result.rows[0] || null;
   }
 
   // Get user API keys

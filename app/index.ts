@@ -180,10 +180,57 @@ app.use((req, res) => {
   });
 });
 
+// NASA Security Principle: Secure Deployment - Configure HTTPS with client certificate authentication
+// Enable mutual TLS for enhanced security in production environments
+
+const startServer = () => {
+  const httpsEnabled = process.env.HTTPS_ENABLED === 'true' || config.nodeEnv === 'production';
+
+  if (httpsEnabled) {
+    // HTTPS configuration with client certificate verification
+    const https = require('https');
+    const fs = require('fs');
+
+    // Server certificate and key
+    const serverOptions = {
+      key: fs.readFileSync(process.env.SSL_KEY_PATH || './certs/server.key'),
+      cert: fs.readFileSync(process.env.SSL_CERT_PATH || './certs/server.crt'),
+      ca: process.env.SSL_CA_PATH ? fs.readFileSync(process.env.SSL_CA_PATH) : undefined,
+
+      // Client certificate verification for mutual TLS
+      requestCert: true, // Request client certificate
+      rejectUnauthorized: process.env.CLIENT_CERT_REQUIRED === 'true', // Require valid client certificate
+
+      // Security options
+      ciphers: 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384',
+      honorCipherOrder: true,
+      secureProtocol: 'TLSv1_2_method'
+    };
+
+    const httpsServer = https.createServer(serverOptions, app);
+
+    httpsServer.listen(config.port, () => {
+      logger.info(`Vaelix Bank API HTTPS server running on port ${config.port} with mutual TLS`, {
+        environment: config.nodeEnv,
+        clientCertRequired: process.env.CLIENT_CERT_REQUIRED === 'true'
+      });
+    });
+
+    // Handle HTTPS server errors
+    httpsServer.on('tlsClientError', (error: any, socket: any) => {
+      logger.warn('TLS client error', { error: error.message });
+    });
+
+  } else {
+    // HTTP server for development
+    app.listen(config.port, () => {
+      logger.info(`Vaelix Bank API HTTP server running on port ${config.port}`, { environment: config.nodeEnv });
+    });
+  }
+};
+
 // NASA Security Principle: Secure Deployment - Log startup for audit trail
 // Ensure server only starts after all security middleware is configured
-app.listen(config.port, () => {
-  logger.info(`Vaelix Bank API server running on port ${config.port}`, { environment: config.nodeEnv });
-});
+startServer();
 
 export default app;
