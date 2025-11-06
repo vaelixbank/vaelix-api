@@ -8,26 +8,20 @@
 # Build stage
 FROM node:18-alpine AS builder
 
-# Install pnpm globally
-RUN npm install -g pnpm@9.15.0
-
 # Set working directory
 WORKDIR /app
 
-# Copy package files for dependency installation
+# Copy package files
 COPY package.json pnpm-lock.yaml ./
 
-# Install dependencies (including dev dependencies for build)
-RUN pnpm install
+# Install all dependencies using npm
+RUN npm install --ignore-scripts
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN pnpm run build
-
-# Remove dev dependencies to reduce image size
-RUN pnpm prune --prod
+RUN npx tsc
 
 # Production stage
 FROM node:18-alpine AS production
@@ -79,7 +73,7 @@ EXPOSE 3000
 ENTRYPOINT ["dumb-init", "--"]
 
 # Start the application
-CMD ["pnpm", "start"]
+CMD ["node", "dist/index.js"]
 
 # ============================================
 # OCI Labels for container metadata
