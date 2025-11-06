@@ -153,7 +153,9 @@ export const sanitizeInput = (req: Request, res: Response, next: NextFunction) =
 
   try {
     req.body = sanitizeObject(req.body);
-    req.query = sanitizeObject(req.query);
+    // Create a new object for query to avoid read-only property error
+    const sanitizedQuery = sanitizeObject(req.query);
+    Object.assign(req.query, sanitizedQuery);
     req.params = sanitizeObject(req.params);
     next();
   } catch (error) {
